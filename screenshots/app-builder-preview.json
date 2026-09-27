@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Lodd",
+      "hasCanvas": false,
+      "bodyTextLen": 1222,
+      "bodyTextHash": "8e651d39e3b35221afa5a1dac678022ecc38634763235d314bae765179639865",
+      "bodyTextPrefix": "BASAR · LOTTERI Lodd 0 lodd igjen Storskjerm Angre Ny runde Tøm ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Lodd",
+      "hasCanvas": false,
+      "bodyTextLen": 1222,
+      "bodyTextHash": "8e651d39e3b35221afa5a1dac678022ecc38634763235d314bae765179639865",
+      "bodyTextPrefix": "BASAR · LOTTERI Lodd 0 lodd igjen Storskjerm Angre Ny runde Tøm ",
+      "horizontalOverflow": true,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
