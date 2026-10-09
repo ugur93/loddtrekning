@@ -1,5 +1,20 @@
+import { colorLabel } from "@/lib/colors";
 import { formatTicket } from "@/lib/tickets";
+import type { Locale } from "@/lib/i18n";
 import type { RaffleSnapshot } from "@/lib/types";
+
+type PrintCopy = {
+  lang: Locale;
+  save: string;
+  close: string;
+  list: string;
+  winners: string;
+  ticket: string;
+  prize: string;
+  time: string;
+  empty: string;
+  foot: string;
+};
 
 function escapeHtml(value: string) {
   const amp = "\u0026";
@@ -10,8 +25,12 @@ function escapeHtml(value: string) {
     .replaceAll('"', `${amp}quot;`);
 }
 
-export function openWinnersPrint(state: Pick<RaffleSnapshot, "eventName" | "winners">) {
-  const when = new Date().toLocaleDateString("nb-NO", {
+export function openWinnersPrint(
+  state: Pick<RaffleSnapshot, "eventName" | "winners">,
+  copy: PrintCopy,
+) {
+  const tag = copy.lang === "tr" ? "tr-TR" : "nb-NO";
+  const when = new Date().toLocaleDateString(tag, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -27,19 +46,19 @@ export function openWinnersPrint(state: Pick<RaffleSnapshot, "eventName" | "winn
         <td class="nr">${i + 1}</td>
         <td>
           <span class="swatch" style="background:${escapeHtml(w.colorHex)}"></span>
-          <strong>${escapeHtml(formatTicket(w.colorName, w.letter, w.number))}</strong>
+          <strong>${escapeHtml(formatTicket(colorLabel(w.colorName, copy.lang), w.letter, w.number))}</strong>
         </td>
         <td>${escapeHtml(w.prizeName ?? "—")}${img}</td>
-        <td class="time">${new Date(w.drawnAt).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}</td>
+        <td class="time">${new Date(w.drawnAt).toLocaleTimeString(tag, { hour: "2-digit", minute: "2-digit" })}</td>
       </tr>`;
     })
     .join("");
 
   const html = `<!doctype html>
-<html lang="nb">
+<html lang="${copy.lang}">
 <head>
   <meta charset="utf-8" />
-  <title>Vinnere — ${escapeHtml(state.eventName)}</title>
+  <title>${escapeHtml(copy.list)} — ${escapeHtml(state.eventName)}</title>
   <style>
     @page { size: A4; margin: 16mm; }
     :root { color-scheme: light; }
@@ -68,20 +87,20 @@ export function openWinnersPrint(state: Pick<RaffleSnapshot, "eventName" | "winn
 </head>
 <body>
   <div class="bar noprint">
-    <button onclick="window.print()">Lagre som PDF</button>
-    <button class="ghost" onclick="window.close()">Lukk</button>
+    <button onclick="window.print()">${escapeHtml(copy.save)}</button>
+    <button class="ghost" onclick="window.close()">${escapeHtml(copy.close)}</button>
   </div>
   <h1>${escapeHtml(state.eventName)}</h1>
-  <p class="meta">Vinnerliste · ${escapeHtml(when)} · ${rows.length} vinner${rows.length === 1 ? "" : "e"}</p>
+  <p class="meta">${escapeHtml(copy.list)} · ${escapeHtml(when)} · ${rows.length} ${escapeHtml(copy.winners)}</p>
   <table>
     <thead>
-      <tr><th>#</th><th>Lodd</th><th>Premie</th><th>Tid</th></tr>
+      <tr><th>#</th><th>${escapeHtml(copy.ticket)}</th><th>${escapeHtml(copy.prize)}</th><th>${escapeHtml(copy.time)}</th></tr>
     </thead>
     <tbody>
-      ${body || `<tr><td colspan="4">Ingen vinnere ennå.</td></tr>`}
+      ${body || `<tr><td colspan="4">${escapeHtml(copy.empty)}</td></tr>`}
     </tbody>
   </table>
-  <p class="foot">Generert med Lodd. Hvert lodd trekkes bare én gang.</p>
+  <p class="foot">${escapeHtml(copy.foot)}</p>
   <script>window.addEventListener("load", () => setTimeout(() => window.print(), 250));</script>
 </body>
 </html>`;

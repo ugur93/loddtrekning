@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { DrawOverlay } from "@/components/draw-overlay";
 import { TicketCard } from "@/components/ticket-card";
 import { Button } from "@/components/ui/button";
+import { getDrawMuted, setDrawMuted, unlockDrawAudio } from "@/lib/draw-audio";
+import { useI18n } from "@/lib/i18n";
 import { expandPool } from "@/lib/tickets";
 import type { Winner } from "@/lib/types";
 import { useRaffleStore } from "@/lib/store";
@@ -17,14 +20,28 @@ export function DrawStage() {
   const last = winners[0];
   const nextPrize = prizes[0];
   const [live, setLive] = useState<{ winner: Winner; remaining: number } | null>(null);
+  const [muted, setMuted] = useState(false);
+  const { t } = useI18n();
+
+  useEffect(() => {
+    setMuted(getDrawMuted());
+  }, [live]);
 
   function runDraw() {
+    unlockDrawAudio();
     const result = draw();
     if (!result.ok) {
-      toast.error(result.reason === "empty" ? "Legg til loddbøker først" : "Ingen lodd igjen å trekke");
+      toast.error(result.reason === "empty" ? t.needBooks : t.noneLeft);
       return;
     }
     setLive({ winner: result.winner, remaining: result.remaining });
+  }
+
+  function toggleMute() {
+    unlockDrawAudio();
+    const next = !getDrawMuted();
+    setDrawMuted(next);
+    setMuted(next);
   }
 
   return (
@@ -37,12 +54,19 @@ export function DrawStage() {
               "radial-gradient(ellipse 80% 70% at 50% 40%, rgb(244 239 230 / 0.07), transparent 60%)",
           }}
         />
+        <button
+          type="button"
+          onClick={toggleMute}
+          className="absolute top-3 right-3 z-10 grid size-11 place-items-center rounded-md text-stage-muted hover:bg-stage-fg/10 hover:text-stage-fg"
+          aria-label={muted ? t.soundOn : t.soundOff}
+          aria-pressed={!muted}
+        >
+          {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
+        </button>
         <div className="relative flex flex-col items-center text-center">
-          <p className="text-xs tracking-[0.22em] text-stage-muted uppercase">Neste trekk</p>
-          <h2 className="mt-2 font-display text-3xl tracking-tight sm:text-4xl">Trekk vinner</h2>
-          <p className="mt-2 max-w-md text-sm text-stage-muted">
-            Blant {remaining} solgte lodd. Trukne lodd huskes og kommer ikke opp igjen.
-          </p>
+          <p className="text-xs tracking-widest text-stage-muted uppercase">{t.nextDraw}</p>
+          <h2 className="mt-2 font-display text-3xl tracking-tight sm:text-4xl">{t.drawWinner}</h2>
+          <p className="mt-2 max-w-md text-sm text-stage-muted">{t.among(remaining)}</p>
 
           {nextPrize ? (
             <div className="mt-5 flex items-center gap-3 rounded-lg bg-stage-fg/10 px-3 py-2 text-left">
@@ -54,12 +78,12 @@ export function DrawStage() {
                 />
               ) : null}
               <div>
-                <p className="text-[0.65rem] tracking-wide text-stage-muted uppercase">Premie i kø</p>
+                <p className="text-xs tracking-wide text-stage-muted uppercase">{t.prizeQueued}</p>
                 <p className="font-medium">{nextPrize.name}</p>
               </div>
             </div>
           ) : (
-            <p className="mt-4 text-sm text-stage-muted">Ingen premie i kø — du kan likevel trekke lodd.</p>
+            <p className="mt-4 text-sm text-stage-muted">{t.noPrize}</p>
           )}
 
           <Button
@@ -69,12 +93,12 @@ export function DrawStage() {
             onClick={runDraw}
             disabled={remaining === 0}
           >
-            Trekk vinner
+            {t.drawWinner}
           </Button>
 
           {last && !live ? (
             <div className="mt-10">
-              <p className="mb-3 text-xs tracking-[0.18em] text-stage-muted uppercase">Sist trukket</p>
+              <p className="mb-3 text-xs tracking-widest text-stage-muted uppercase">{t.lastDrawn}</p>
               <TicketCard
                 colorName={last.colorName}
                 colorHex={last.colorHex}
@@ -87,7 +111,7 @@ export function DrawStage() {
               ) : null}
             </div>
           ) : remaining === 0 && books.length > 0 ? (
-            <p className="mt-8 text-sm text-stage-muted">Alle lodd er trukket. Start ny runde for å trekke på nytt.</p>
+            <p className="mt-8 text-sm text-stage-muted">{t.allDrawn}</p>
           ) : null}
         </div>
       </section>
@@ -98,8 +122,14 @@ export function DrawStage() {
           remaining={live.remaining}
           onClose={() => setLive(null)}
           onDrawAgain={() => {
-            setLive(null);
-            window.setTimeout(runDraw, 40);
+            unlockDrawAudio();
+            const result = draw();
+            if (!result.ok) {
+              toast.error(t.noneLeft);
+              setLive(null);
+              return;
+            }
+            setLive({ winner: result.winner, remaining: result.remaining });
           }}
         />
       ) : null}

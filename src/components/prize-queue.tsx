@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resizeImageFile } from "@/lib/image";
+import { useI18n } from "@/lib/i18n";
 import { useRaffleStore } from "@/lib/store";
 
 export function PrizeQueue() {
@@ -15,28 +16,29 @@ export function PrizeQueue() {
   const [name, setName] = useState("");
   const [image, setImage] = useState<string | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
+  const { t } = useI18n();
 
   async function onFile(file: File | undefined) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      toast.error("Velg et bilde");
+      toast.error(t.needImage);
       return;
     }
     try {
       const data = await resizeImageFile(file);
       setImage(data);
     } catch {
-      toast.error("Kunne ikke lese bildet");
+      toast.error(t.imageFail);
     }
   }
 
   function submit() {
     const trimmed = name.trim();
     if (!trimmed && !image) {
-      toast.error("Skriv premienavn eller last opp bilde");
+      toast.error(t.needPrize);
       return;
     }
-    addPrize({ name: trimmed || "Premie", imageDataUrl: image });
+    addPrize({ name: trimmed || t.prize, imageDataUrl: image });
     setName("");
     setImage(undefined);
     if (fileRef.current) fileRef.current.value = "";
@@ -44,17 +46,17 @@ export function PrizeQueue() {
 
   return (
     <div className="rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-5">
-      <h2 className="font-display text-xl tracking-tight">Premier</h2>
-      <p className="mb-4 text-sm text-muted">Valgfritt. Neste premie i køen brukes automatisk ved trekning.</p>
+      <h2 className="font-display text-xl tracking-tight">{t.prizes}</h2>
+      <p className="mb-4 text-sm text-muted">{t.prizesHint}</p>
 
       <div className="grid gap-3">
         <div className="grid gap-1.5">
-          <Label htmlFor="prize-name">Premie</Label>
+          <Label htmlFor="prize-name">{t.prize}</Label>
           <Input
             id="prize-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="f.eks. Marsipankake"
+            placeholder={t.prizePlaceholder}
             onKeyDown={(e) => {
               if (e.key === "Enter") submit();
             }}
@@ -70,7 +72,7 @@ export function PrizeQueue() {
           />
           <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()}>
             <ImagePlus className="size-4" />
-            {image ? "Bytt bilde" : "Bilde av premie"}
+            {image ? t.changeImage : t.prizeImage}
           </Button>
           {image ? (
             <img
@@ -80,7 +82,7 @@ export function PrizeQueue() {
             />
           ) : null}
           <Button type="button" onClick={submit} className="ml-auto">
-            Legg i kø
+            {t.queue}
           </Button>
         </div>
       </div>
@@ -104,7 +106,7 @@ export function PrizeQueue() {
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted">Premie {i + 1}</p>
+                <p className="text-xs text-muted">{t.prizeN(i + 1)}</p>
                 <p className="truncate font-medium">{prize.name}</p>
               </div>
               <div className="flex">
@@ -113,7 +115,7 @@ export function PrizeQueue() {
                   className="grid size-10 place-items-center text-muted hover:text-fg disabled:opacity-30"
                   disabled={i === 0}
                   onClick={() => movePrize(prize.id, -1)}
-                  aria-label="Flytt opp"
+                  aria-label={t.moveUp}
                 >
                   <ChevronUp className="size-4" />
                 </button>
@@ -122,7 +124,7 @@ export function PrizeQueue() {
                   className="grid size-10 place-items-center text-muted hover:text-fg disabled:opacity-30"
                   disabled={i === prizes.length - 1}
                   onClick={() => movePrize(prize.id, 1)}
-                  aria-label="Flytt ned"
+                  aria-label={t.moveDown}
                 >
                   <ChevronDown className="size-4" />
                 </button>
@@ -130,7 +132,7 @@ export function PrizeQueue() {
                   type="button"
                   className="grid size-10 place-items-center text-muted hover:text-primary"
                   onClick={() => removePrize(prize.id)}
-                  aria-label="Fjern premie"
+                  aria-label={t.removePrize}
                 >
                   <Trash2 className="size-4" />
                 </button>

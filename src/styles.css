@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "./**/*.{ts,tsx}";
+@source "../spa/**/*.{html,tsx}";
 
 @theme {
   --font-sans: "Figtree", "Segoe UI", system-ui, sans-serif;
@@ -102,29 +104,252 @@
   background-position: 0 center;
 }
 
-.orbit-spin {
-  animation: orbit-spin 2.85s cubic-bezier(0.12, 0.72, 0.18, 1) forwards;
+.reel-window {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--color-stage) 55%, black);
+  box-shadow:
+    inset 0 1px 0 rgb(244 239 230 / 0.1),
+    inset 0 -10px 18px rgb(0 0 0 / 0.45);
 }
 
-.reel-spin {
-  transition: transform 2.4s cubic-bezier(0.12, 0.82, 0.08, 1);
+.reel-window.is-locked {
+  animation: lock-glow 0.45s ease-out;
+  box-shadow:
+    inset 0 0 0 1.5px rgb(232 200 114 / 0.55),
+    inset 0 1px 0 rgb(244 239 230 / 0.12),
+    inset 0 -10px 18px rgb(0 0 0 / 0.45);
 }
 
-.reel-spin.delay-letter {
-  transition-duration: 2.75s;
+@keyframes lock-glow {
+  0% {
+    box-shadow:
+      inset 0 0 0 2px rgb(232 200 114 / 0.95),
+      0 0 22px rgb(232 200 114 / 0.35);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1.5px rgb(232 200 114 / 0.55),
+      inset 0 -10px 18px rgb(0 0 0 / 0.45);
+  }
 }
 
-.reel-spin.delay-number {
-  transition-duration: 3.15s;
+.reel-window-mask {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    to bottom,
+    rgb(8 7 6 / 0.28) 0%,
+    transparent 18%,
+    transparent 82%,
+    rgb(8 7 6 / 0.28) 100%
+  );
 }
 
-@keyframes orbit-spin {
+.reel-select {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(244 239 230 / 0.14);
+}
+
+.machine {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  padding: 1.15rem 0.9rem 1rem;
+  background:
+    linear-gradient(180deg, rgb(244 239 230 / 0.1), rgb(244 239 230 / 0.03) 28%, rgb(0 0 0 / 0.22));
+  box-shadow:
+    0 0 0 1px rgb(212 175 90 / 0.38),
+    inset 0 1px 0 rgb(244 239 230 / 0.16),
+    0 22px 48px rgb(0 0 0 / 0.38);
+}
+
+.machine-lamp {
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 18%;
+  right: 18%;
+  height: 3px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, #e8c872, transparent);
+  box-shadow: 0 0 18px rgb(232 200 114 / 0.55);
+  animation: lamp-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes lamp-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.machine.is-charged .machine-lamp {
+  animation-duration: 0.55s;
+}
+
+.machine.is-charged-2 .machine-lamp {
+  animation-duration: 0.28s;
+  box-shadow: 0 0 28px rgb(232 200 114 / 0.9);
+}
+
+.machine.lock-hit {
+  animation: machine-thud 0.22s ease;
+}
+
+@keyframes machine-thud {
+  0% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(3px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.machine-bulbs {
+  display: flex;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.machine-bulbs span {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgb(244 239 230 / 0.16);
+  box-shadow: inset 0 0 0 1px rgb(244 239 230 / 0.22);
+}
+
+.machine-bulbs span.on {
+  background: #e8c872;
+  box-shadow: 0 0 12px rgb(232 200 114 / 0.9);
+}
+
+.stage-spot {
+  pointer-events: none;
+  position: absolute;
+  top: 28%;
+  left: 50%;
+  z-index: 0;
+  width: min(720px, 92vw);
+  height: 460px;
+  transform: translate(-50%, -42%);
+  background: radial-gradient(ellipse at center, rgb(232 200 114 / 0.18), transparent 68%);
+}
+
+.stage-spot.is-live {
+  animation: spot-breathe 1.7s ease-in-out infinite;
+}
+
+.stage-spot.is-tight {
+  animation-duration: 0.65s;
+}
+
+@keyframes spot-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translate(-50%, -42%) scale(0.92);
+  }
+  50% {
+    opacity: 0.85;
+    transform: translate(-50%, -42%) scale(1.06);
+  }
+}
+
+.sealed {
+  margin: 0.9rem auto 0;
+  width: fit-content;
+  border: 1px dashed rgb(232 200 114 / 0.5);
+  border-radius: 999px;
+  padding: 0.4rem 0.85rem;
+  color: rgb(232 200 114);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  animation: sealed-pulse 1.15s ease-in-out infinite;
+}
+
+@keyframes sealed-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.winner-ring {
+  position: absolute;
+  inset: 8%;
+  z-index: 0;
+  border: 2px solid rgb(232 200 114 / 0.75);
+  border-radius: 999px;
+  animation: ring-out 0.95s ease-out both;
+  pointer-events: none;
+}
+
+.winner-ring.delay {
+  animation-delay: 0.16s;
+}
+
+@keyframes ring-out {
   from {
-    transform: rotate(0deg);
+    opacity: 0.9;
+    transform: scale(0.55);
   }
   to {
-    transform: rotate(740deg);
+    opacity: 0;
+    transform: scale(1.7);
   }
+}
+
+.winner-halo {
+  position: absolute;
+  inset: -22% -16%;
+  background: radial-gradient(circle, rgb(232 200 114 / 0.34), transparent 68%);
+  filter: blur(10px);
+  animation: rise-in 0.6s ease both;
+}
+
+.ticket-ticker {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.ticket-ticker-track {
+  display: flex;
+  width: max-content;
+  gap: 0.75rem;
+  animation: ticket-ticker 18s linear infinite;
+}
+
+@keyframes ticket-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticket-pop {
+  animation: ticket-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes ticket-pop {
@@ -137,19 +362,6 @@
     opacity: 1;
     transform: scale(1) translateY(0);
     filter: blur(0);
-  }
-}
-
-.ticket-pop {
-  animation: ticket-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes confetti-burst {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
   }
 }
 

@@ -4,7 +4,7 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Lodd";
+const APP_NAME = "Loddtrekning";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -14,7 +14,7 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       {
         name: "description",
-        content: "Loddtrekning for basar og lotteri. Trekk blant solgte lodd — aldri samme lodd to ganger.",
+        content: "Loddtrekning. Trekk blant solgte lodd — aldri samme lodd to ganger.",
       },
       { name: "theme-color", content: "#9f1d2c" },
     ],

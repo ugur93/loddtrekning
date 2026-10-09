@@ -1,9 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import { ConfettiCanvas } from "@/components/confetti-canvas";
+import { LocaleSwitch } from "@/components/locale-switch";
+import { SlotReel, type SlotItem } from "@/components/slot-reel";
 import { TicketCard } from "@/components/ticket-card";
 import { Button } from "@/components/ui/button";
-import { expandPool } from "@/lib/tickets";
+import { colorLabel } from "@/lib/colors";
+import {
+  getDrawMuted,
+  playClunk,
+  playFanfare,
+  playTick,
+  setDrawMuted,
+  setSpinEnergy,
+  startDrawAmbience,
+  stopDrawAmbience,
+  unlockDrawAudio,
+} from "@/lib/draw-audio";
 import type { Winner } from "@/lib/types";
+import { useI18n } from "@/lib/i18n";
 import { useRaffleStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -16,127 +31,81 @@ type Props = {
   onDrawAgain: () => void;
 };
 
-function Reel({
-  items,
-  itemHeight,
-  className,
-  variant,
-}: {
-  items: string[];
-  itemHeight: number;
-  className?: string;
-  variant: "color" | "letter" | "number";
-}) {
-  const [offset, setOffset] = useState(0);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setOffset((items.length - 1) * itemHeight);
-      });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [items.length, itemHeight]);
-
-  return (
-      <div
-      className="relative overflow-hidden rounded-md bg-stage-fg/5"
-      style={{ height: itemHeight }}
-    >
-      <div
-        className={cn(
-          "reel-spin will-change-transform",
-          variant === "letter" && "delay-letter",
-          variant === "number" && "delay-number",
-        )}
-        style={{ transform: `translateY(-${offset}px)` }}
-      >
-        {items.map((item, i) => (
-          <div
-            key={`${item}-${i}`}
-            className={cn(
-              "flex items-center justify-center font-ticket tracking-tight text-stage-fg",
-              className,
-            )}
-            style={{ height: itemHeight }}
-          >
-            {item}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function buildStrip(options: string[], winner: string, spins: number) {
-  const pool = options.length ? options : [winner];
-  const strip: string[] = [];
-  for (let s = 0; s < spins; s++) {
-    for (let i = 0; i < pool.length; i++) {
-      strip.push(pool[(i + s) % pool.length]!);
-    }
-  }
-  if (strip[strip.length - 1] === winner) strip.push(pool[0] ?? winner);
-  strip.push(winner);
-  return strip;
-}
+const ITEM_H = 76;
 
 export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) {
   const books = useRaffleStore((s) => s.books);
-  const drawnKeys = useRaffleStore((s) => s.drawnKeys);
   const [phase, setPhase] = useState<Phase>("spin");
+  const [locked, setLocked] = useState({ color: false, letter: false, number: false });
+  const [muted, setMuted] = useState(false);
+  const { locale, t } = useI18n();
+  const revealTimer = useRef(0);
+  const revealed = useRef(false);
+
   const reduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const samples = useMemo(() => {
-    const pool = expandPool(books, drawnKeys);
-    if (pool.length === 0) {
-      return books.slice(0, 12).map((b, i) => ({
-        key: `${b.id}-s${i}`,
-        colorName: b.colorName,
-        colorHex: b.colorHex,
-        letter: b.letter,
-        number: b.from + (i % Math.max(1, b.to - b.from + 1)),
-      }));
+  const colorItems = useMemo<SlotItem[]>(() => {
+    const seen = new Set<string>();
+    const out: SlotItem[] = [];
+    for (const b of books) {
+      const id = b.colorName.toUpperCase();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, label: b.colorName, color: b.colorHex });
     }
-    const out = [];
-    const n = Math.min(14, Math.max(8, pool.length));
-    for (let i = 0; i < n; i++) {
-      const t = pool[i % pool.length]!;
-      out.push(t);
+    if (!seen.has(winner.colorName.toUpperCase())) {
+      out.unshift({
+        id: winner.colorName.toUpperCase(),
+        label: winner.colorName,
+        color: winner.colorHex,
+      });
     }
     return out;
-  }, [books, drawnKeys]);
+  }, [books, winner.colorHex, winner.colorName]);
 
-  const colorOpts = useMemo(
-    () => Array.from(new Set(books.map((b) => b.colorName.toUpperCase()))),
-    [books],
-  );
-  const letterOpts = useMemo(
-    () => Array.from(new Set(books.map((b) => b.letter.toUpperCase()))),
-    [books],
-  );
-  const numberOpts = useMemo(() => {
-    const nums: string[] = [];
-    for (let i = 0; i < 18; i++) {
-      const n = 1 + ((winner.number * 7 + i * 13) % 100);
-      nums.push(String(n).padStart(3, "0"));
+  const letterItems = useMemo<SlotItem[]>(() => {
+    const fromBooks = Array.from(new Set(books.map((b) => b.letter.toUpperCase())));
+    const win = winner.letter.toUpperCase();
+    const base = fromBooks.length >= 3 ? fromBooks : "ABCDEFGHJKLMNPRSTUVWXY".split("");
+    const ids = new Set(base);
+    ids.add(win);
+    return [...ids].map((l) => ({ id: l, label: l }));
+  }, [books, winner.letter]);
+
+  const numberItems = useMemo<SlotItem[]>(() => {
+    const ids = new Set<string>([String(winner.number)]);
+    let n = (winner.number * 17 + 31) % 100;
+    while (ids.size < 18) {
+      ids.add(String(n === 0 ? 100 : n));
+      n = (n * 13 + 7) % 100;
     }
-    return nums;
+    return [...ids].map((id) => ({
+      id,
+      label: String(Number(id)).padStart(3, "0"),
+    }));
   }, [winner.number]);
 
-  const colorStrip = useMemo(
-    () => buildStrip(colorOpts, winner.colorName.toUpperCase(), 3),
-    [colorOpts, winner.colorName],
-  );
-  const letterStrip = useMemo(
-    () => buildStrip(letterOpts, winner.letter.toUpperCase(), 4),
-    [letterOpts, winner.letter],
-  );
-  const numberStrip = useMemo(
-    () => buildStrip(numberOpts, String(winner.number).padStart(3, "0"), 3),
-    [numberOpts, winner.number],
+  const tickerTickets = useMemo(
+    () =>
+      books.slice(0, 8).flatMap((b, i) => [
+        {
+          key: `${b.id}-a`,
+          colorName: b.colorName,
+          colorHex: b.colorHex,
+          letter: b.letter,
+          number: ((b.from + i * 13) % Math.max(1, b.to)) + 1,
+        },
+        {
+          key: `${b.id}-b`,
+          colorName: b.colorName,
+          colorHex: b.colorHex,
+          letter: b.letter,
+          number: ((b.from + i * 29) % Math.max(1, b.to)) + 1,
+        },
+      ]),
+    [books],
   );
 
   const confettiColors = useMemo(
@@ -145,13 +114,26 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
   );
 
   useEffect(() => {
+    setMuted(getDrawMuted());
+  }, []);
+
+  useEffect(() => {
+    window.clearTimeout(revealTimer.current);
+    revealed.current = false;
+    setPhase("spin");
+    setLocked({ color: false, letter: false, number: false });
     if (reduced) {
       setPhase("reveal");
+      playFanfare();
       return;
     }
-    const t = window.setTimeout(() => setPhase("reveal"), 3300);
-    return () => window.clearTimeout(t);
-  }, [reduced, winner.id]);
+    unlockDrawAudio();
+    startDrawAmbience();
+    return () => {
+      window.clearTimeout(revealTimer.current);
+      stopDrawAmbience();
+    };
+  }, [winner.id, reduced]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -161,92 +143,188 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, phase]);
 
+  function lock(which: "color" | "letter" | "number") {
+    setLocked((s) => {
+      if (s[which]) return s;
+      playClunk();
+      const next = { ...s, [which]: true };
+      const count = Number(next.color) + Number(next.letter) + Number(next.number);
+      setSpinEnergy(1 - count * 0.32);
+      if (next.color && next.letter && next.number && !revealed.current) {
+        revealed.current = true;
+        revealTimer.current = window.setTimeout(() => {
+          playFanfare();
+          setPhase("reveal");
+        }, 420);
+      }
+      return next;
+    });
+  }
+
+  const charge = Number(locked.color) + Number(locked.letter) + Number(locked.number);
+  const colorText = colorLabel(winner.colorName, locale);
+  const machineRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = machineRef.current;
+    if (!el || charge === 0) return;
+    el.classList.remove("lock-hit");
+    void el.offsetWidth;
+    el.classList.add("lock-hit");
+  }, [charge]);
+
+  function toggleMute() {
+    unlockDrawAudio();
+    const next = !muted;
+    setMuted(next);
+    setDrawMuted(next);
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col bg-stage text-stage-fg"
       role="dialog"
       aria-modal="true"
-      aria-label="Loddtrekning"
+      aria-label={t.appTitle}
     >
+      <div
+        className={cn("stage-spot", phase === "spin" && "is-live", charge > 1 && "is-tight")}
+        aria-hidden
+      />
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 70% 55% at 50% 42%, rgb(244 239 230 / 0.08), transparent 62%)",
+            "radial-gradient(ellipse 70% 55% at 50% 38%, rgb(244 239 230 / 0.1), transparent 62%)",
         }}
       />
       <ConfettiCanvas active={phase === "reveal"} colors={confettiColors} />
 
       <header className="relative z-10 flex items-center justify-between px-5 py-4">
-        <p className="text-sm tracking-wide text-stage-muted uppercase">Loddtrekning</p>
-        {phase === "reveal" ? (
+        <p className="text-sm tracking-[0.22em] text-stage-muted uppercase">{t.appTitle}</p>
+        <div className="flex items-center gap-1">
+          <LocaleSwitch tone="stage" />
           <button
             type="button"
-            onClick={onClose}
-            className="h-11 px-3 text-sm text-stage-muted hover:text-stage-fg"
+            onClick={toggleMute}
+            className="grid size-11 place-items-center rounded-md text-stage-muted hover:bg-stage-fg/10 hover:text-stage-fg"
+            aria-label={muted ? t.soundOn : t.soundOff}
+            aria-pressed={!muted}
           >
-            Lukk
+            {muted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
           </button>
-        ) : (
-          <p className="text-sm text-stage-muted">Trekker blant gjenværende lodd…</p>
-        )}
+          {phase === "reveal" ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-11 px-3 text-sm text-stage-muted hover:text-stage-fg"
+            >
+              {t.close}
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 pb-8">
         {phase === "spin" ? (
-          <>
-            <div className="relative mb-8 grid size-[15.5rem] place-items-center overflow-hidden sm:size-[18rem]">
-              <div className="orbit-spin pointer-events-none absolute inset-0">
-                {samples.map((t, i) => {
-                  const angle = (360 / samples.length) * i;
-                  return (
-                    <div
-                      key={t.key}
-                      className="absolute top-1/2 left-1/2"
-                      style={{
-                        transform: `translate(-50%, -50%) rotate(${angle}deg) translateY(-5.6rem) rotate(${-angle}deg)`,
-                      }}
-                    >
-                      <TicketCard
-                        colorName={t.colorName}
-                        colorHex={t.colorHex}
-                        letter={t.letter}
-                        number={t.number}
-                        size="sm"
-                        className="scale-75 opacity-75"
-                      />
-                    </div>
-                  );
-                })}
+          <div className="w-full max-w-xl">
+            {tickerTickets.length > 0 ? (
+              <div className="ticket-ticker mb-6" aria-hidden>
+                <div className="ticket-ticker-track">
+                  {[...tickerTickets, ...tickerTickets].map((t, i) => (
+                    <TicketCard
+                      key={`${t.key}-${i}`}
+                      colorName={t.colorName}
+                      colorHex={t.colorHex}
+                      letter={t.letter}
+                      number={t.number}
+                      size="sm"
+                      className="shrink-0"
+                    />
+                  ))}
+                </div>
               </div>
-              <p className="relative font-display text-lg text-stage-muted">Tombola</p>
+            ) : null}
+            <p className="mb-5 text-center font-display text-2xl tracking-tight sm:text-3xl">
+              {t.drawing}
+            </p>
+            <div
+              ref={machineRef}
+              className={cn("machine", charge > 0 && "is-charged", charge > 1 && "is-charged-2")}
+            >
+              <div className="machine-lamp" aria-hidden />
+              <div className="machine-bulbs" aria-hidden>
+                <span className={locked.color ? "on" : undefined} />
+                <span className={locked.letter ? "on" : undefined} />
+                <span className={locked.number ? "on" : undefined} />
+              </div>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <ReelCol label={t.color} locked={locked.color} lockedLabel={t.locked}>
+                  <SlotReel
+                    key={`${winner.id}-color`}
+                    items={colorItems}
+                    winnerId={winner.colorName.toUpperCase()}
+                    durationMs={2200}
+                    delayMs={40}
+                    itemHeight={ITEM_H}
+                    reduced={reduced}
+                    locked={locked.color}
+                    kind="color"
+                    onTick={playTick}
+                    onStop={() => lock("color")}
+                  />
+                </ReelCol>
+                <ReelCol label={t.letter} locked={locked.letter} lockedLabel={t.locked}>
+                  <SlotReel
+                    key={`${winner.id}-letter`}
+                    items={letterItems}
+                    winnerId={winner.letter.toUpperCase()}
+                    durationMs={2800}
+                    delayMs={120}
+                    itemHeight={ITEM_H}
+                    reduced={reduced}
+                    locked={locked.letter}
+                    onTick={playTick}
+                    onStop={() => lock("letter")}
+                  />
+                </ReelCol>
+                <ReelCol label={t.number} locked={locked.number} lockedLabel={t.locked}>
+                  <SlotReel
+                    key={`${winner.id}-number`}
+                    items={numberItems}
+                    winnerId={String(winner.number)}
+                    durationMs={3400}
+                    delayMs={200}
+                    itemHeight={ITEM_H}
+                    reduced={reduced}
+                    locked={locked.number}
+                    onTick={playTick}
+                    onStop={() => lock("number")}
+                  />
+                </ReelCol>
+              </div>
             </div>
-
-            <div className="grid w-full max-w-lg grid-cols-3 gap-2 rounded-xl bg-stage-fg/10 p-3 sm:gap-3 sm:p-4">
-              <div className="min-w-0">
-                <p className="mb-1.5 text-center text-xs tracking-widest text-stage-muted uppercase">
-                  Farge
-                </p>
-                <Reel items={colorStrip} itemHeight={72} variant="color" className="px-1 text-xl sm:text-2xl" />
-              </div>
-              <div className="min-w-0">
-                <p className="mb-1.5 text-center text-xs tracking-widest text-stage-muted uppercase">
-                  Bokstav
-                </p>
-                <Reel items={letterStrip} itemHeight={72} variant="letter" className="text-4xl" />
-              </div>
-              <div className="min-w-0">
-                <p className="mb-1.5 text-center text-xs tracking-widest text-stage-muted uppercase">
-                  Nummer
-                </p>
-                <Reel items={numberStrip} itemHeight={72} variant="number" className="text-4xl tabular-nums" />
-              </div>
-            </div>
-          </>
+            {(winner.prizeName || winner.prizeImage) && (
+              <p className="sealed">{t.prizeWaiting}</p>
+            )}
+            <p className="mt-4 text-center text-sm text-stage-muted">
+              {locked.number
+                ? t.locking
+                : locked.letter
+                  ? t.lastReel
+                  : locked.color
+                    ? t.twoLeft
+                    : t.drum}
+            </p>
+          </div>
         ) : (
-          <div className="flex w-full max-w-lg flex-col items-center text-center">
-            <p className="rise-in text-sm tracking-[0.2em] text-stage-muted uppercase">Vinneren er</p>
-            <div className="ticket-pop mt-5">
+          <div className="flex w-full max-w-lg flex-col items-center text-center" aria-live="assertive">
+            <p className="rise-in text-sm tracking-[0.28em] text-stage-muted uppercase">{t.winnerIs}</p>
+            <div className="relative mt-5">
+              <div className="winner-ring" aria-hidden />
+              <div className="winner-ring delay" aria-hidden />
+              <div className="winner-halo" aria-hidden />
+              <div className="ticket-pop relative z-10">
               <TicketCard
                 colorName={winner.colorName}
                 colorHex={winner.colorHex}
@@ -254,30 +332,27 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
                 number={winner.number}
                 size="hero"
               />
+              </div>
             </div>
             <p className="rise-in stagger-2 mt-6 font-display text-3xl tracking-tight sm:text-4xl">
-              {winner.colorName} {winner.letter}{" "}
+              {colorText} {winner.letter}{" "}
               <span className="tabular-nums">{String(winner.number).padStart(3, "0")}</span>
             </p>
             {winner.prizeName || winner.prizeImage ? (
               <div className="rise-in stagger-3 mt-5 flex items-center gap-3 rounded-lg bg-stage-fg/10 px-4 py-3">
                 {winner.prizeImage ? (
-                  <img
-                    src={winner.prizeImage}
-                    alt=""
-                    className="size-16 rounded-md object-cover"
-                  />
+                  <img src={winner.prizeImage} alt="" className="size-16 rounded-md object-cover" />
                 ) : null}
                 <div className="text-left">
-                  <p className="text-xs tracking-wide text-stage-muted uppercase">Premie</p>
-                  <p className="font-medium">{winner.prizeName ?? "Premie"}</p>
+                  <p className="text-xs tracking-wide text-stage-muted uppercase">{t.prize}</p>
+                  <p className="font-medium">{winner.prizeName ?? t.prize}</p>
                 </div>
               </div>
             ) : null}
-            <p className="mt-4 text-sm text-stage-muted tabular-nums">{remaining} lodd igjen i puljen</p>
+            <p className="mt-4 text-sm text-stage-muted tabular-nums">{t.leftInPool(remaining)}</p>
             <div className="mt-8 flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
               <Button variant="stage" size="lg" onClick={onDrawAgain} disabled={remaining === 0}>
-                Trekk neste
+                {t.drawNext}
               </Button>
               <Button
                 variant="ghost"
@@ -285,12 +360,39 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
                 className="text-stage-fg hover:bg-stage-fg/10"
                 onClick={onClose}
               >
-                Ferdig
+                {t.done}
               </Button>
             </div>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ReelCol({
+  label,
+  locked,
+  lockedLabel,
+  children,
+}: {
+  label: string;
+  locked: boolean;
+  lockedLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="mb-1.5 text-center text-xs tracking-widest text-stage-muted uppercase">{label}</p>
+      {children}
+      <p
+        className={cn(
+          "mt-1.5 h-5 text-center text-xs tracking-wide uppercase",
+          locked ? "text-stage-fg" : "text-transparent",
+        )}
+      >
+        {lockedLabel}
+      </p>
     </div>
   );
 }

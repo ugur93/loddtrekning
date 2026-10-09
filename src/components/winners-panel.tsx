@@ -3,38 +3,53 @@ import { toast } from "sonner";
 import { TicketCard } from "@/components/ticket-card";
 import { Button } from "@/components/ui/button";
 import { openWinnersPrint } from "@/lib/export-pdf";
+import { colorLabel } from "@/lib/colors";
+import { localeTag, useI18n } from "@/lib/i18n";
 import { useRaffleStore } from "@/lib/store";
 
 export function WinnersPanel() {
   const winners = useRaffleStore((s) => s.winners);
   const eventName = useRaffleStore((s) => s.eventName);
+  const { locale, t } = useI18n();
 
   function exportPdf() {
-    const ok = openWinnersPrint({ eventName, winners });
-    if (!ok) toast.error("Tillat sprettoppvindu for å eksportere PDF");
+    const ok = openWinnersPrint(
+      { eventName, winners },
+      {
+        lang: locale,
+        save: t.savePdf,
+        close: t.close,
+        list: t.winnerList,
+        winners: t.winnerWord(winners.length),
+        ticket: t.ticketCol,
+        prize: t.prize,
+        time: t.timeCol,
+        empty: t.noWinnersPdf,
+        foot: t.pdfFoot,
+      },
+    );
+    if (!ok) toast.error(t.popupBlocked);
   }
 
   return (
     <section className="rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-xl tracking-tight">Vinnere</h2>
+          <h2 className="font-display text-xl tracking-tight">{t.winners}</h2>
           <p className="text-sm text-muted">
-            {winners.length === 0
-              ? "Trukne lodd vises her og trekkes ikke igjen."
-              : `${winners.length} trukket`}
+            {winners.length === 0 ? t.winnersEmpty : t.drawnCount(winners.length)}
           </p>
         </div>
         <Button variant="secondary" onClick={exportPdf} disabled={winners.length === 0}>
           <Download className="size-4" />
-          Eksporter PDF
+          {t.exportPdf}
         </Button>
       </div>
 
       {winners.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center text-muted">
           <Trophy className="size-8 opacity-40" />
-          <p className="text-sm">Ingen vinnere ennå. Trykk Trekk vinner når bøkene er klare.</p>
+          <p className="text-sm">{t.noWinnersYet}</p>
         </div>
       ) : (
         <ol className="grid gap-2">
@@ -55,11 +70,11 @@ export function WinnersPanel() {
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">
-                  {w.colorName} {w.letter} {String(w.number).padStart(3, "0")}
+                  {colorLabel(w.colorName, locale)} {w.letter} {String(w.number).padStart(3, "0")}
                 </p>
                 <p className="truncate text-sm text-muted">
-                  {w.prizeName ?? "Uten premienavn"} ·{" "}
-                  {new Date(w.drawnAt).toLocaleTimeString("nb-NO", {
+                  {w.prizeName ?? t.noPrizeName} ·{" "}
+                  {new Date(w.drawnAt).toLocaleTimeString(localeTag(locale), {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}

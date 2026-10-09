@@ -5,18 +5,18 @@ export type PaletteColor = {
 };
 
 export const PALETTE: PaletteColor[] = [
-  { name: "Rød", hex: "#C62828", aliases: ["rod", "red", "rød"] },
-  { name: "Blå", hex: "#1565C0", aliases: ["bla", "blå", "blue"] },
-  { name: "Gul", hex: "#D4A017", aliases: ["gul", "yellow", "gull"] },
-  { name: "Grønn", hex: "#2E7D32", aliases: ["gronn", "grønn", "green"] },
-  { name: "Rosa", hex: "#C2185B", aliases: ["rosa", "pink"] },
-  { name: "Oransje", hex: "#E65100", aliases: ["oransje", "orange"] },
-  { name: "Turkis", hex: "#00838F", aliases: ["turkis", "cyan", "teal"] },
-  { name: "Lilla", hex: "#5E35B1", aliases: ["lilla", "fiolett", "purple", "violet"] },
-  { name: "Brun", hex: "#6D4C41", aliases: ["brun", "brown"] },
-  { name: "Svart", hex: "#212121", aliases: ["svart", "black"] },
-  { name: "Hvit", hex: "#F3EEE6", aliases: ["hvit", "white"] },
-  { name: "Grå", hex: "#616161", aliases: ["gra", "grå", "gray", "grey"] },
+  { name: "Rød", hex: "#C62828", aliases: ["rod", "red", "rød", "kirmizi", "kırmızı"] },
+  { name: "Blå", hex: "#1565C0", aliases: ["bla", "blå", "blue", "mavi"] },
+  { name: "Gul", hex: "#D4A017", aliases: ["gul", "yellow", "gull", "sari", "sarı"] },
+  { name: "Grønn", hex: "#2E7D32", aliases: ["gronn", "grønn", "green", "yesil", "yeşil"] },
+  { name: "Rosa", hex: "#C2185B", aliases: ["rosa", "pink", "pembe"] },
+  { name: "Oransje", hex: "#E65100", aliases: ["oransje", "orange", "turuncu"] },
+  { name: "Turkis", hex: "#00838F", aliases: ["turkis", "cyan", "teal", "turkuaz"] },
+  { name: "Lilla", hex: "#5E35B1", aliases: ["lilla", "fiolett", "purple", "violet", "mor"] },
+  { name: "Brun", hex: "#6D4C41", aliases: ["brun", "brown", "kahverengi", "kahve"] },
+  { name: "Svart", hex: "#212121", aliases: ["svart", "black", "siyah"] },
+  { name: "Hvit", hex: "#F3EEE6", aliases: ["hvit", "white", "beyaz"] },
+  { name: "Grå", hex: "#616161", aliases: ["gra", "grå", "gray", "grey", "gri"] },
 ];
 
 function normalize(value: string) {
@@ -37,6 +37,27 @@ export function colorFromName(name: string): PaletteColor | undefined {
 
 export function hexForColorName(name: string, fallback = "#C62828") {
   return colorFromName(name)?.hex ?? fallback;
+}
+
+export function colorLabel(name: string, locale: "nb" | "tr") {
+  const known = colorFromName(name);
+  if (!known) return name;
+  if (locale === "nb") return known.name;
+  const tr: Record<string, string> = {
+    Rød: "Kırmızı",
+    Blå: "Mavi",
+    Gul: "Sarı",
+    Grønn: "Yeşil",
+    Rosa: "Pembe",
+    Oransje: "Turuncu",
+    Turkis: "Turkuaz",
+    Lilla: "Mor",
+    Brun: "Kahverengi",
+    Svart: "Siyah",
+    Hvit: "Beyaz",
+    Grå: "Gri",
+  };
+  return tr[known.name] ?? known.name;
 }
 
 export function parseHex(hex: string): { r: number; g: number; b: number } {

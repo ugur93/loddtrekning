@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TicketCard } from "@/components/ticket-card";
-import { PALETTE, colorFromName, hexForColorName } from "@/lib/colors";
+import { PALETTE, colorFromName, colorLabel, hexForColorName, ticketInk } from "@/lib/colors";
+import { useI18n } from "@/lib/i18n";
 import { useRaffleStore } from "@/lib/store";
 import { BOOK_LETTERS, bookFromParsed, parseBookLines } from "@/lib/tickets";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,12 @@ export function AddBookForm() {
   const [to, setTo] = useState(100);
   const [bulk, setBulk] = useState("");
   const [showBulk, setShowBulk] = useState(false);
+  const { locale, t } = useI18n();
+
+  useEffect(() => {
+    const known = colorFromName(colorName);
+    if (known) setColorName(colorLabel(known.name, locale));
+  }, [locale, colorName]);
 
   const previewHex = colorHex || hexForColorName(colorName);
 
@@ -40,80 +47,81 @@ export function AddBookForm() {
     const name = colorName.trim();
     const lettr = letter.trim().toUpperCase();
     if (!name || !lettr) {
-      toast.error("Farge og bokstav må fylles ut");
+      toast.error(t.needColor);
       return;
     }
     if (from < 1 || to < from || to > 9999) {
-      toast.error("Ugyldig nummerområde");
+      toast.error(t.badRange);
       return;
     }
     addBook({ colorName: name, colorHex: previewHex, letter: lettr, from, to });
-    toast.success(`La til ${name} ${lettr} ${from}–${to}`);
+    toast.success(t.addedBook(name, lettr, from, to));
   }
 
   function submitBulk() {
     const parsed = parseBookLines(bulk);
     if (parsed.length === 0) {
-      toast.error("Fant ingen gyldige linjer. Format: Rød A 1–100");
+      toast.error(t.badLines);
       return;
     }
     addBooks(parsed.map(bookFromParsed));
     setBulk("");
     setShowBulk(false);
-    toast.success(`La til ${parsed.length} loddbok${parsed.length === 1 ? "" : "er"}`);
+    toast.success(t.addedBooks(parsed.length));
   }
 
   return (
     <div className="rounded-xl bg-surface p-4 shadow-[var(--shadow-border)] sm:p-5">
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <h2 className="font-display text-xl tracking-tight">Loddbøker</h2>
-          <p className="text-sm text-muted">Farge, bokstav og solgte nummer (1–100).</p>
+          <h2 className="font-display text-xl tracking-tight">{t.booksTitle}</h2>
+          <p className="text-sm text-muted">{t.booksHint}</p>
         </div>
         <button
           type="button"
           className="text-sm text-muted underline-offset-2 hover:text-fg hover:underline"
           onClick={() => setShowBulk((v) => !v)}
         >
-          {showBulk ? "Skjema" : "Hurtiginnlegging"}
+          {showBulk ? t.formToggle : t.bulkToggle}
         </button>
       </div>
 
       {showBulk ? (
         <div className="grid gap-3">
-          <Label htmlFor="bulk">Én bok per linje</Label>
+          <Label htmlFor="bulk">{t.onePerLine}</Label>
           <textarea
             id="bulk"
             value={bulk}
             onChange={(e) => setBulk(e.target.value)}
             rows={6}
-            placeholder={"Rød A 1-100\nBlå L 1-59\nGul B 20-100"}
+            placeholder={t.bulkPlaceholder}
             className="w-full resize-y rounded-md bg-bg px-3 py-2 font-mono text-sm text-fg shadow-[var(--shadow-border)] placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           />
           <Button onClick={submitBulk} disabled={bulkCount === 0}>
-            Legg til {bulkCount || ""} {bulkCount === 1 ? "bok" : "bøker"}
+            {t.addBulk(bulkCount)}
           </Button>
         </div>
       ) : (
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label>Farge</Label>
+            <Label>{t.color}</Label>
             <div className="flex flex-wrap gap-1.5">
               {PALETTE.map((c) => {
-                const active = colorName.toLowerCase() === c.name.toLowerCase();
+                const label = colorLabel(c.name, locale);
+                const active = colorFromName(colorName)?.name === c.name;
                 return (
                   <button
                     key={c.name}
                     type="button"
-                    onClick={() => onColorChip(c.name, c.hex)}
+                    onClick={() => onColorChip(label, c.hex)}
                     className={cn(
                       "flex h-11 items-center gap-2 rounded-sm px-2.5 text-sm",
                       "shadow-[var(--shadow-border)]",
                       active ? "ring-2 ring-fg/70" : "hover:shadow-[var(--shadow-border-hover)]",
                     )}
-                    style={{ background: c.hex, color: c.name === "Hvit" || c.name === "Gul" ? "#1c1814" : "#faf6ef" }}
+                    style={{ background: c.hex, color: ticketInk(c.hex) }}
                   >
-                    {c.name}
+                    {label}
                   </button>
                 );
               })}
@@ -122,14 +130,14 @@ export function AddBookForm() {
               <Input
                 value={colorName}
                 onChange={(e) => onColorNameChange(e.target.value)}
-                placeholder="Fargenavn"
-                aria-label="Fargenavn"
+                placeholder={t.colorName}
+                aria-label={t.colorName}
               />
               <label
                 className="relative size-11 overflow-hidden rounded-md shadow-[var(--shadow-border)]"
                 style={{ backgroundColor: previewHex }}
               >
-                <span className="sr-only">Velg farge</span>
+                <span className="sr-only">{t.pickColor}</span>
                 <input
                   type="color"
                   value={previewHex}
@@ -141,7 +149,7 @@ export function AddBookForm() {
           </div>
 
           <div className="grid gap-2">
-            <Label>Bokstav</Label>
+            <Label>{t.letter}</Label>
             <div className="grid grid-cols-7 gap-1 sm:grid-cols-9">
               {BOOK_LETTERS.map((l) => (
                 <button
@@ -161,14 +169,14 @@ export function AddBookForm() {
               value={letter}
               maxLength={8}
               onChange={(e) => setLetter(e.target.value.toUpperCase())}
-              aria-label="Bokstav"
+              aria-label={t.letter}
               className="max-w-32 font-ticket tracking-wider"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="from">Fra nummer</Label>
+              <Label htmlFor="from">{t.from}</Label>
               <Input
                 id="from"
                 type="number"
@@ -179,7 +187,7 @@ export function AddBookForm() {
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="to">Til nummer</Label>
+              <Label htmlFor="to">{t.to}</Label>
               <Input
                 id="to"
                 type="number"
@@ -212,7 +220,7 @@ export function AddBookForm() {
 
           <div className="flex flex-wrap items-end justify-between gap-4">
             <TicketCard
-              colorName={colorName || "Farge"}
+              colorName={colorName || t.color}
               colorHex={previewHex}
               letter={letter || "?"}
               number={from}
@@ -220,7 +228,7 @@ export function AddBookForm() {
             />
             <Button onClick={submitBook} className="min-w-40">
               <Plus className="size-4" />
-              Legg til bok
+              {t.addBook}
             </Button>
           </div>
         </div>

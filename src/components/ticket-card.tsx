@@ -1,4 +1,5 @@
-import { ticketInk } from "@/lib/colors";
+import { colorLabel, ticketInk } from "@/lib/colors";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type Size = "sm" | "md" | "lg" | "hero";
@@ -29,7 +30,9 @@ export function TicketCard({
   className,
   dimmed,
 }: Props) {
+  const { locale, t } = useI18n();
   const ink = ticketInk(colorHex);
+  const name = colorLabel(colorName, locale);
   const num =
     typeof number === "number" ? String(number).padStart(3, "0") : (number ?? "•••");
 
@@ -46,7 +49,7 @@ export function TicketCard({
         color: ink,
         boxShadow: "var(--shadow-border)",
       }}
-      aria-label={`${colorName} ${letter} ${num}`}
+      aria-label={`${name} ${letter} ${num}`}
     >
       <div
         className="flex w-[18%] shrink-0 flex-col items-center justify-center border-r border-dashed"
@@ -64,8 +67,8 @@ export function TicketCard({
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-between px-2.5 py-1.5 sm:px-3 sm:py-2">
         <div className="flex items-start justify-between gap-2">
-          <span className="truncate font-medium tracking-wide uppercase opacity-90">{colorName}</span>
-          <span className="font-ticket tracking-wider opacity-70">LODD</span>
+          <span className="truncate font-medium tracking-wide uppercase opacity-90">{name}</span>
+          <span className="font-ticket tracking-wider uppercase opacity-70">{t.ticketMark}</span>
         </div>
         <div
           className="font-ticket leading-none tracking-tight tabular-nums"
@@ -84,9 +87,9 @@ export function TicketCard({
         </div>
         <div className="flex justify-between text-[0.65em] tracking-[0.18em] uppercase opacity-70">
           <span>
-            {colorName} {letter}
+            {name} {letter}
           </span>
-          <span>basar</span>
+          <span>{t.ticketMark}</span>
         </div>
       </div>
       <div

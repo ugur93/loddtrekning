@@ -1,8 +1,10 @@
 import { Monitor, RotateCcw, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { LocaleSwitch } from "@/components/locale-switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/lib/i18n";
 import { expandPool } from "@/lib/tickets";
 import { useRaffleStore } from "@/lib/store";
 
@@ -19,15 +21,16 @@ export function AppHeader() {
   const setStageMode = useRaffleStore((s) => s.setStageMode);
   const remaining = expandPool(books, drawnKeys).length;
   const [confirm, setConfirm] = useState<"round" | "reset" | null>(null);
+  const { t } = useI18n();
 
   return (
     <header className="flex flex-col gap-4 border-b border-border/80 pb-5">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs tracking-widest text-muted uppercase">Basar · lotteri</p>
-          <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Lodd</h1>
+          <h1 className="font-display text-3xl tracking-tight sm:text-4xl">{t.appTitle}</h1>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <LocaleSwitch />
           <Button
             variant="secondary"
             size="sm"
@@ -35,7 +38,7 @@ export function AppHeader() {
             aria-pressed={stageMode}
           >
             <Monitor className="size-4" />
-            Storskjerm
+            {t.stageScreen}
           </Button>
           <Button
             variant="ghost"
@@ -43,11 +46,11 @@ export function AppHeader() {
             disabled={winners.length === 0}
             onClick={() => {
               undoLast();
-              toast("Siste trekk angret");
+              toast(t.undoToast);
             }}
           >
             <Undo2 className="size-4" />
-            Angre
+            {t.undo}
           </Button>
           {confirm === "round" ? (
             <>
@@ -57,13 +60,13 @@ export function AppHeader() {
                 onClick={() => {
                   newRound();
                   setConfirm(null);
-                  toast("Ny runde — samme bøker, tom vinnerliste");
+                  toast(t.roundToast);
                 }}
               >
-                Bekreft ny runde
+                {t.confirmRound}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setConfirm(null)}>
-                Avbryt
+                {t.cancel}
               </Button>
             </>
           ) : confirm === "reset" ? (
@@ -74,23 +77,23 @@ export function AppHeader() {
                 onClick={() => {
                   resetAll();
                   setConfirm(null);
-                  toast("Alt er tømt");
+                  toast(t.resetToast);
                 }}
               >
-                Bekreft tømming
+                {t.confirmReset}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setConfirm(null)}>
-                Avbryt
+                {t.cancel}
               </Button>
             </>
           ) : (
             <>
               <Button variant="ghost" size="sm" onClick={() => setConfirm("round")}>
                 <RotateCcw className="size-4" />
-                Ny runde
+                {t.newRound}
               </Button>
               <Button variant="ghost" size="sm" className="text-muted" onClick={() => setConfirm("reset")}>
-                Tøm alt
+                {t.resetAll}
               </Button>
             </>
           )}
@@ -98,18 +101,18 @@ export function AppHeader() {
       </div>
       <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end sm:gap-6">
         <label className="grid min-w-0 flex-1 gap-1.5">
-          <span className="text-xs font-medium tracking-wide text-muted uppercase">Navn på trekningen</span>
+          <span className="text-xs font-medium tracking-wide text-muted uppercase">{t.eventLabel}</span>
           <Input
             value={eventName}
             onChange={(e) => setEventName(e.target.value)}
-            aria-label="Navn på trekningen"
+            aria-label={t.eventLabel}
             className="min-w-0 max-w-md"
           />
         </label>
         <p className="text-sm text-muted tabular-nums sm:pb-2.5">
-          {remaining} lodd igjen
-          {winners.length ? ` · ${winners.length} trukket` : ""}
-          {books.length ? ` · ${books.length} bøker` : ""}
+          {t.remaining(remaining)}
+          {winners.length ? ` · ${t.drawnCount(winners.length)}` : ""}
+          {books.length ? ` · ${t.bookCount(books.length)}` : ""}
         </p>
       </div>
     </header>
