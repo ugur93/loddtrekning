@@ -75,15 +75,15 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
   }, [books, winner.letter]);
 
   const numberItems = useMemo<SlotItem[]>(() => {
-    const ids = new Set<string>([String(winner.number)]);
-    let n = (winner.number * 17 + 31) % 100;
-    while (ids.size < 18) {
-      ids.add(String(n === 0 ? 100 : n));
-      n = (n * 13 + 7) % 100;
+    const win = Math.min(100, Math.max(1, Math.round(winner.number) || 1));
+    const ids = [String(win)];
+    for (let step = 1; ids.length < 18 && step < 100; step++) {
+      const id = String(((win - 1 + step * 7) % 100) + 1);
+      if (!ids.includes(id)) ids.push(id);
     }
-    return [...ids].map((id) => ({
+    return ids.map((id) => ({
       id,
-      label: String(Number(id)).padStart(3, "0"),
+      label: id.padStart(3, "0"),
     }));
   }, [winner.number]);
 
