@@ -115,23 +115,35 @@
 }
 
 .reel-window.is-locked {
-  animation: lock-glow 0.45s ease-out;
+  animation: reel-blink 0.48s linear both;
   box-shadow:
     inset 0 0 0 1.5px rgb(232 200 114 / 0.55),
     inset 0 1px 0 rgb(244 239 230 / 0.12),
     inset 0 -10px 18px rgb(0 0 0 / 0.45);
 }
 
-@keyframes lock-glow {
-  0% {
+@keyframes reel-blink {
+  0%,
+  15%,
+  33%,
+  48%,
+  66%,
+  81% {
     box-shadow:
-      inset 0 0 0 2px rgb(232 200 114 / 0.95),
-      0 0 22px rgb(232 200 114 / 0.35);
+      inset 0 0 0 3px rgb(255 236 170),
+      0 0 26px rgb(232 200 114 / 0.9);
+    background: color-mix(in oklab, #e8c872 34%, var(--color-stage));
   }
+  16%,
+  32%,
+  49%,
+  65%,
+  82%,
   100% {
     box-shadow:
-      inset 0 0 0 1.5px rgb(232 200 114 / 0.55),
+      inset 0 0 0 1.5px rgb(232 200 114 / 0.4),
       inset 0 -10px 18px rgb(0 0 0 / 0.45);
+    background: color-mix(in oklab, var(--color-stage) 55%, black);
   }
 }
 
@@ -349,19 +361,38 @@
 }
 
 .ticket-pop {
-  animation: ticket-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation:
+    ticket-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both,
+    winner-blink 0.48s linear both;
 }
 
 @keyframes ticket-pop {
   0% {
     opacity: 0;
     transform: scale(0.92) translateY(12px);
-    filter: blur(6px);
   }
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
-    filter: blur(0);
+  }
+}
+
+@keyframes winner-blink {
+  0%,
+  15%,
+  33%,
+  48%,
+  66%,
+  81% {
+    filter: brightness(1.45);
+  }
+  16%,
+  32%,
+  49%,
+  65%,
+  82%,
+  100% {
+    filter: brightness(1);
   }
 }
 

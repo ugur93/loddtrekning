@@ -5,7 +5,7 @@ import { LocaleSwitch } from "@/components/locale-switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
-import { expandPool } from "@/lib/tickets";
+import { eligiblePool } from "@/lib/tickets";
 import { useRaffleStore } from "@/lib/store";
 
 export function AppHeader() {
@@ -19,7 +19,7 @@ export function AppHeader() {
   const resetAll = useRaffleStore((s) => s.resetAll);
   const stageMode = useRaffleStore((s) => s.stageMode);
   const setStageMode = useRaffleStore((s) => s.setStageMode);
-  const remaining = expandPool(books, drawnKeys).length;
+  const remaining = eligiblePool(books, drawnKeys, winners).length;
   const [confirm, setConfirm] = useState<"round" | "reset" | null>(null);
   const { t } = useI18n();
 

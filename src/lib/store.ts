@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   EXAMPLE_BOOKS,
+  eligiblePool,
   expandPool,
   pickTicket,
   remainingInBook,
@@ -12,7 +13,7 @@ import type { Prize, RaffleSnapshot, TicketBook, Winner } from "@/lib/types";
 
 type DrawResult =
   | { ok: true; winner: Winner; remaining: number }
-  | { ok: false; reason: "empty" | "none" };
+  | { ok: false; reason: "empty" | "none" | "capped" };
 
 type RaffleState = RaffleSnapshot & {
   addBook: (book: Omit<TicketBook, "id"> & { id?: string }) => string;
@@ -79,11 +80,13 @@ export const useRaffleStore = create<RaffleState>()(
           return { prizes: next };
         }),
       draw: () => {
-        const { books, drawnKeys, prizes } = get();
+        const { books, drawnKeys, prizes, winners } = get();
         if (books.length === 0) return { ok: false, reason: "empty" };
-        const pool = expandPool(books, drawnKeys);
+        const sold = expandPool(books, drawnKeys);
+        if (sold.length === 0) return { ok: false, reason: "none" };
+        const pool = eligiblePool(books, drawnKeys, winners);
         const ticket = pickTicket(pool);
-        if (!ticket) return { ok: false, reason: "none" };
+        if (!ticket) return { ok: false, reason: "capped" };
         const [prize, ...rest] = prizes;
         const winner = winnerFromTicket(ticket, prize);
         set((s) => ({

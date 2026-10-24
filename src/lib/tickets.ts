@@ -32,6 +32,29 @@ export function expandPool(books: TicketBook[], drawnKeys: Iterable<string>): Po
   return pool;
 }
 
+export const MAX_SAME = 2;
+
+/** Tickets still for sale, minus colors or letters that already won twice. */
+export function eligiblePool(
+  books: TicketBook[],
+  drawnKeys: Iterable<string>,
+  winners: Pick<Winner, "colorName" | "letter">[],
+): PoolTicket[] {
+  const colors = new Map<string, number>();
+  const letters = new Map<string, number>();
+  for (const winner of winners) {
+    const color = winner.colorName.trim().toUpperCase();
+    const letter = winner.letter.trim().toUpperCase();
+    colors.set(color, (colors.get(color) ?? 0) + 1);
+    letters.set(letter, (letters.get(letter) ?? 0) + 1);
+  }
+  return expandPool(books, drawnKeys).filter((ticket) => {
+    const color = ticket.colorName.trim().toUpperCase();
+    const letter = ticket.letter.trim().toUpperCase();
+    return (colors.get(color) ?? 0) < MAX_SAME && (letters.get(letter) ?? 0) < MAX_SAME;
+  });
+}
+
 export function remainingInBook(book: TicketBook, drawnKeys: Iterable<string>) {
   const drawn = drawnKeys instanceof Set ? drawnKeys : new Set(drawnKeys);
   let count = 0;

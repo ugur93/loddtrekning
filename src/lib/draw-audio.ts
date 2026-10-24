@@ -284,41 +284,48 @@ export function playTick() {
 
 export function playClunk() {
   if (!ctx || !sfxBus || !noiseBuf) return;
-  const t = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  osc.type = "sine";
-  osc.frequency.setValueAtTime(180, t);
-  osc.frequency.exponentialRampToValueAtTime(62, t + 0.18);
-  const og = ctx.createGain();
-  og.gain.setValueAtTime(0.32, t);
-  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
-  osc.connect(og);
-  og.connect(sfxBus);
-  osc.onended = () => {
-    osc.disconnect();
-    og.disconnect();
-  };
-  osc.start(t);
-  osc.stop(t + 0.28);
+  const ac = ctx;
+  const bus = sfxBus;
+  const buf = noiseBuf;
+  for (let i = 0; i < 3; i++) {
+    const t = ac.currentTime + i * 0.16;
+    const osc = ac.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(210, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.09);
+    const og = ac.createGain();
+    og.gain.setValueAtTime(0.0001, t);
+    og.gain.exponentialRampToValueAtTime(0.34, t + 0.008);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    osc.connect(og);
+    og.connect(bus);
+    osc.onended = () => {
+      osc.disconnect();
+      og.disconnect();
+    };
+    osc.start(t);
+    osc.stop(t + 0.12);
 
-  const src = ctx.createBufferSource();
-  src.buffer = noiseBuf;
-  const lp = ctx.createBiquadFilter();
-  lp.type = "lowpass";
-  lp.frequency.value = 520;
-  const ng = ctx.createGain();
-  ng.gain.setValueAtTime(0.2, t);
-  ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-  src.connect(lp);
-  lp.connect(ng);
-  ng.connect(sfxBus);
-  src.onended = () => {
-    src.disconnect();
-    lp.disconnect();
-    ng.disconnect();
-  };
-  src.start(t);
-  src.stop(t + 0.18);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const lp = ac.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 640;
+    const ng = ac.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.exponentialRampToValueAtTime(0.22, t + 0.006);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    src.connect(lp);
+    lp.connect(ng);
+    ng.connect(bus);
+    src.onended = () => {
+      src.disconnect();
+      lp.disconnect();
+      ng.disconnect();
+    };
+    src.start(t);
+    src.stop(t + 0.09);
+  }
 }
 
 export function playFanfare() {
