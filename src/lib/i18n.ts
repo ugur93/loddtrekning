@@ -66,13 +66,11 @@ const nb = {
   nextDraw: "Neste trekk",
   drawWinner: "Trekk vinner",
   among: (n: number) =>
-    `Blant ${n} lodd som kan trekkes. Samme farge og samme bokstav trekkes maks 2 ganger.`,
+    `Blant ${n} solgte lodd. Samme farge eller bokstav kan komme to ganger på rad, så må en annen.`,
   prizeQueued: "Premie i kø",
   noPrize: "Ingen premie i kø — du kan likevel trekke lodd.",
   lastDrawn: "Sist trukket",
   allDrawn: "Alle lodd er trukket. Start ny runde for å trekke på nytt.",
-  limitReached:
-    "Samme farge eller bokstav er allerede trukket 2 ganger. Start ny runde for å trekke mer.",
   needBooks: "Legg til loddbøker først",
   noneLeft: "Ingen lodd igjen å trekke",
   soundOn: "Slå på lyd",
@@ -170,12 +168,11 @@ const tr: Msg = {
   nextDraw: "Sıradaki çekiliş",
   drawWinner: "Kazananı çek",
   among: (n) =>
-    `${n} çekilebilir bilet. Aynı renk ve aynı harf en fazla 2 kez çekilir.`,
+    `${n} satılan bilet arasından. Aynı renk veya harf art arda en fazla iki kez gelir, sonra başka biri.`,
   prizeQueued: "Sıradaki ödül",
   noPrize: "Sırada ödül yok — yine de bilet çekebilirsiniz.",
   lastDrawn: "Son çekilen",
   allDrawn: "Tüm biletler çekildi. Yeniden çekmek için yeni tur başlatın.",
-  limitReached: "Aynı renk veya harf zaten 2 kez çekildi. Devam etmek için yeni tur başlatın.",
   needBooks: "Önce bilet defteri ekleyin",
   noneLeft: "Çekilecek bilet kalmadı",
   soundOn: "Sesi aç",

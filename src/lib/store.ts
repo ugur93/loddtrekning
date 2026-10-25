@@ -13,7 +13,7 @@ import type { Prize, RaffleSnapshot, TicketBook, Winner } from "@/lib/types";
 
 type DrawResult =
   | { ok: true; winner: Winner; remaining: number }
-  | { ok: false; reason: "empty" | "none" | "capped" };
+  | { ok: false; reason: "empty" | "none" };
 
 type RaffleState = RaffleSnapshot & {
   addBook: (book: Omit<TicketBook, "id"> & { id?: string }) => string;
@@ -86,7 +86,7 @@ export const useRaffleStore = create<RaffleState>()(
         if (sold.length === 0) return { ok: false, reason: "none" };
         const pool = eligiblePool(books, drawnKeys, winners);
         const ticket = pickTicket(pool);
-        if (!ticket) return { ok: false, reason: "capped" };
+        if (!ticket) return { ok: false, reason: "none" };
         const [prize, ...rest] = prizes;
         const winner = winnerFromTicket(ticket, prize);
         set((s) => ({
@@ -94,7 +94,7 @@ export const useRaffleStore = create<RaffleState>()(
           drawnKeys: [...s.drawnKeys, ticket.key],
           prizes: rest,
         }));
-        return { ok: true, winner, remaining: pool.length - 1 };
+        return { ok: true, winner, remaining: sold.length - 1 };
       },
       undoLast: () =>
         set((s) => {

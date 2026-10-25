@@ -32,27 +32,33 @@ export function expandPool(books: TicketBook[], drawnKeys: Iterable<string>): Po
   return pool;
 }
 
-export const MAX_SAME = 2;
-
-/** Tickets still for sale, minus colors or letters that already won twice. */
+/** Next draw skips a color or letter that just won twice in a row. */
 export function eligiblePool(
   books: TicketBook[],
   drawnKeys: Iterable<string>,
   winners: Pick<Winner, "colorName" | "letter">[],
 ): PoolTicket[] {
-  const colors = new Map<string, number>();
-  const letters = new Map<string, number>();
-  for (const winner of winners) {
-    const color = winner.colorName.trim().toUpperCase();
-    const letter = winner.letter.trim().toUpperCase();
-    colors.set(color, (colors.get(color) ?? 0) + 1);
-    letters.set(letter, (letters.get(letter) ?? 0) + 1);
-  }
-  return expandPool(books, drawnKeys).filter((ticket) => {
+  const pool = expandPool(books, drawnKeys);
+  const newest = winners[0];
+  const previous = winners[1];
+  if (!newest || !previous) return pool;
+
+  const colorA = newest.colorName.trim().toUpperCase();
+  const colorB = previous.colorName.trim().toUpperCase();
+  const letterA = newest.letter.trim().toUpperCase();
+  const letterB = previous.letter.trim().toUpperCase();
+  const blockedColor = colorA === colorB ? colorA : null;
+  const blockedLetter = letterA === letterB ? letterA : null;
+  if (!blockedColor && !blockedLetter) return pool;
+
+  const filtered = pool.filter((ticket) => {
     const color = ticket.colorName.trim().toUpperCase();
     const letter = ticket.letter.trim().toUpperCase();
-    return (colors.get(color) ?? 0) < MAX_SAME && (letters.get(letter) ?? 0) < MAX_SAME;
+    if (blockedColor && color === blockedColor) return false;
+    if (blockedLetter && letter === blockedLetter) return false;
+    return true;
   });
+  return filtered.length > 0 ? filtered : pool;
 }
 
 export function remainingInBook(book: TicketBook, drawnKeys: Iterable<string>) {

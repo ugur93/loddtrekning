@@ -6,7 +6,7 @@ import { TicketCard } from "@/components/ticket-card";
 import { Button } from "@/components/ui/button";
 import { getDrawMuted, setDrawMuted, unlockDrawAudio } from "@/lib/draw-audio";
 import { useI18n } from "@/lib/i18n";
-import { eligiblePool, expandPool } from "@/lib/tickets";
+import { expandPool } from "@/lib/tickets";
 import type { Winner } from "@/lib/types";
 import { useRaffleStore } from "@/lib/store";
 
@@ -16,8 +16,7 @@ export function DrawStage() {
   const prizes = useRaffleStore((s) => s.prizes);
   const winners = useRaffleStore((s) => s.winners);
   const draw = useRaffleStore((s) => s.draw);
-  const soldLeft = expandPool(books, drawnKeys).length;
-  const remaining = eligiblePool(books, drawnKeys, winners).length;
+  const remaining = expandPool(books, drawnKeys).length;
   const last = winners[0];
   const nextPrize = prizes[0];
   const [live, setLive] = useState<{ winner: Winner; remaining: number } | null>(null);
@@ -32,13 +31,7 @@ export function DrawStage() {
     unlockDrawAudio();
     const result = draw();
     if (!result.ok) {
-      toast.error(
-        result.reason === "empty"
-          ? t.needBooks
-          : result.reason === "capped"
-            ? t.limitReached
-            : t.noneLeft,
-      );
+      toast.error(result.reason === "empty" ? t.needBooks : t.noneLeft);
       return;
     }
     setLive({ winner: result.winner, remaining: result.remaining });
@@ -117,8 +110,6 @@ export function DrawStage() {
                 <p className="mt-3 text-sm text-stage-muted">{last.prizeName}</p>
               ) : null}
             </div>
-          ) : remaining === 0 && soldLeft > 0 ? (
-            <p className="mt-8 text-sm text-stage-muted">{t.limitReached}</p>
           ) : remaining === 0 && books.length > 0 ? (
             <p className="mt-8 text-sm text-stage-muted">{t.allDrawn}</p>
           ) : null}
@@ -134,7 +125,7 @@ export function DrawStage() {
             unlockDrawAudio();
             const result = draw();
             if (!result.ok) {
-              toast.error(result.reason === "capped" ? t.limitReached : t.noneLeft);
+              toast.error(t.noneLeft);
               setLive(null);
               return;
             }
