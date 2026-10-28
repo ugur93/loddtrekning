@@ -1,19 +1,20 @@
 import { create } from "zustand";
+import { colorFromName } from "@/lib/colors";
 import { persist } from "zustand/middleware";
 import {
   EXAMPLE_BOOKS,
-  eligiblePool,
   expandPool,
   pickTicket,
   remainingInBook,
   ticketKey,
   winnerFromTicket,
 } from "@/lib/tickets";
+import type { DrawMode } from "@/lib/fair-draw";
 import type { Prize, RaffleSnapshot, TicketBook, Winner } from "@/lib/types";
 
 type DrawResult =
   | { ok: true; winner: Winner; remaining: number }
-  | { ok: false; reason: "empty" | "none" | "capped" };
+  | { ok: false; reason: "empty" | "none" };
 
 type RaffleState = RaffleSnapshot & {
   addBook: (book: Omit<TicketBook, "id"> & { id?: string }) => string;
@@ -29,7 +30,10 @@ type RaffleState = RaffleSnapshot & {
   resetAll: () => void;
   loadExample: () => void;
   setStageMode: (on: boolean) => void;
+  setDrawMode: (mode: DrawMode) => void;
 };
+
+const OLD_HEX = new Set(["#1565C0", "#D4A017", "#2E7D32", "#C2185B"]);
 
 const initial: RaffleSnapshot = {
   eventName: "Loddtrekning",
@@ -38,6 +42,7 @@ const initial: RaffleSnapshot = {
   winners: [],
   drawnKeys: [],
   stageMode: false,
+  drawMode: "balanced",
 };
 
 export const useRaffleStore = create<RaffleState>()(
@@ -82,11 +87,9 @@ export const useRaffleStore = create<RaffleState>()(
       draw: () => {
         const { books, drawnKeys, prizes, winners } = get();
         if (books.length === 0) return { ok: false, reason: "empty" };
-        const sold = expandPool(books, drawnKeys);
-        if (sold.length === 0) return { ok: false, reason: "none" };
-        const pool = eligiblePool(books, drawnKeys, winners);
-        const ticket = pickTicket(pool);
-        if (!ticket) return { ok: false, reason: "capped" };
+        const pool = expandPool(books, drawnKeys);
+        const ticket = pickTicket(pool, winners, get().drawMode);
+        if (!ticket) return { ok: false, reason: "none" };
         const [prize, ...rest] = prizes;
         const winner = winnerFromTicket(ticket, prize);
         set((s) => ({
@@ -124,9 +127,26 @@ export const useRaffleStore = create<RaffleState>()(
               : s.books,
         })),
       setStageMode: (stageMode) => set({ stageMode }),
+      setDrawMode: (drawMode) => set({ drawMode }),
     }),
     {
       name: "lodd-raffle-v1",
+      version: 2,
+      // v2: the four book colors became pastel; recolor saved books and winners.
+      migrate: (persisted, version) => {
+        const state = persisted as RaffleSnapshot;
+        if (version < 2) {
+          const recolor = <T extends { colorName: string; colorHex: string }>(row: T): T => {
+            const known = colorFromName(row.colorName);
+            return known && OLD_HEX.has(row.colorHex.toUpperCase())
+              ? { ...row, colorHex: known.hex }
+              : row;
+          };
+          state.books = (state.books ?? []).map(recolor);
+          state.winners = (state.winners ?? []).map(recolor);
+        }
+        return state;
+      },
       skipHydration: true,
       partialize: (s) => ({
         eventName: s.eventName,
@@ -135,6 +155,7 @@ export const useRaffleStore = create<RaffleState>()(
         winners: s.winners,
         drawnKeys: s.drawnKeys,
         stageMode: s.stageMode,
+        drawMode: s.drawMode,
       }),
     },
   ),

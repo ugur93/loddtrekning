@@ -17,7 +17,8 @@ import {
   stopDrawAmbience,
   unlockDrawAudio,
 } from "@/lib/draw-audio";
-import type { Winner } from "@/lib/types";
+import { expandPool, formatNumber } from "@/lib/tickets";
+import type { PoolTicket, Winner } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
 import { useRaffleStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,8 @@ const ITEM_H = 76;
 
 export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) {
   const books = useRaffleStore((s) => s.books);
+  const drawnKeys = useRaffleStore((s) => s.drawnKeys);
+  const winners = useRaffleStore((s) => s.winners);
   const [phase, setPhase] = useState<Phase>("spin");
   const [locked, setLocked] = useState({ color: false, letter: false, number: false });
   const [muted, setMuted] = useState(false);
@@ -74,39 +77,35 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
     return [...ids].map((l) => ({ id: l, label: l }));
   }, [books, winner.letter]);
 
+  // Decoys are real sold numbers, so the reel never shows a number nobody has.
   const numberItems = useMemo<SlotItem[]>(() => {
-    const win = Math.min(100, Math.max(1, Math.round(winner.number) || 1));
-    const ids = [String(win)];
-    for (let step = 1; ids.length < 18 && step < 100; step++) {
-      const id = String(((win - 1 + step * 7) % 100) + 1);
-      if (!ids.includes(id)) ids.push(id);
+    const sold = new Set<number>();
+    for (const b of books) {
+      for (let n = b.from; n <= b.to && sold.size < 4000; n++) sold.add(n);
     }
-    return ids.map((id) => ({
-      id,
-      label: id.padStart(3, "0"),
+    sold.delete(winner.number);
+    const others = [...sold];
+    for (let i = others.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [others[i], others[j]] = [others[j]!, others[i]!];
+    }
+    return [winner.number, ...others.slice(0, 17)].map((n) => ({
+      id: String(n),
+      label: formatNumber(n),
     }));
-  }, [winner.number]);
+  }, [books, winner.number]);
 
-  const tickerTickets = useMemo(
-    () =>
-      books.slice(0, 8).flatMap((b, i) => [
-        {
-          key: `${b.id}-a`,
-          colorName: b.colorName,
-          colorHex: b.colorHex,
-          letter: b.letter,
-          number: ((b.from + i * 13) % Math.max(1, b.to)) + 1,
-        },
-        {
-          key: `${b.id}-b`,
-          colorName: b.colorName,
-          colorHex: b.colorHex,
-          letter: b.letter,
-          number: ((b.from + i * 29) % Math.max(1, b.to)) + 1,
-        },
-      ]),
-    [books],
-  );
+  const tickerTickets = useMemo(() => {
+    const pool = expandPool(books, drawnKeys);
+    const out: (PoolTicket & { key: string })[] = [];
+    for (let i = 0; i < Math.min(16, pool.length); i++) {
+      const ticket = pool[Math.floor(Math.random() * pool.length)]!;
+      out.push({ ...ticket, key: `${ticket.key}-${i}` });
+    }
+    return out;
+    // Re-sample only per draw, not when drawnKeys changes mid-spin.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [books, winner.id]);
 
   const confettiColors = useMemo(
     () => [...new Set([...books.map((b) => b.colorHex), winner.colorHex, "#f4efe6", "#9f1d2c"])],
@@ -225,7 +224,8 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
         </div>
       </header>
 
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 pb-8">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-8">
         {phase === "spin" ? (
           <div className="w-full max-w-xl">
             {tickerTickets.length > 0 ? (
@@ -336,7 +336,7 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
             </div>
             <p className="rise-in stagger-2 mt-6 font-display text-3xl tracking-tight sm:text-4xl">
               {colorText} {winner.letter}{" "}
-              <span className="tabular-nums">{String(winner.number).padStart(3, "0")}</span>
+              <span className="tabular-nums">{formatNumber(winner.number)}</span>
             </p>
             {winner.prizeName || winner.prizeImage ? (
               <div className="rise-in stagger-3 mt-5 flex items-center gap-3 rounded-lg bg-stage-fg/10 px-4 py-3">
@@ -366,7 +366,57 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
           </div>
         )}
       </div>
+      <WinnersRail
+        winners={phase === "reveal" ? winners : winners.filter((w) => w.id !== winner.id)}
+        freshId={phase === "reveal" ? winner.id : undefined}
+      />
+      </div>
     </div>
+  );
+}
+
+export function WinnersRail({ winners, freshId }: { winners: Winner[]; freshId?: string }) {
+  const { locale, t } = useI18n();
+  if (winners.length === 0) return null;
+  return (
+    <aside
+      className="shrink-0 border-t border-stage-fg/10 bg-stage-fg/[0.03] lg:w-80 lg:border-t-0 lg:border-l"
+      aria-label={t.winnersSoFar}
+    >
+      <p className="px-4 pt-3 text-xs tracking-widest text-stage-muted uppercase lg:pt-5">
+        {t.winnersSoFar} · <span className="tabular-nums">{winners.length}</span>
+      </p>
+      <ol className="flex gap-3 overflow-x-auto px-4 py-3 lg:max-h-[calc(100dvh-8rem)] lg:flex-col lg:gap-2 lg:overflow-x-visible lg:overflow-y-auto">
+        {winners.map((w, i) => (
+          <li
+            key={w.id}
+            className={cn(
+              "flex shrink-0 items-center gap-3 rounded-lg p-1.5 lg:p-2",
+              w.id === freshId ? "rise-in bg-stage-fg/15 ring-1 ring-stage-fg/40" : "bg-stage-fg/5",
+            )}
+          >
+            <span className="w-6 text-center font-ticket text-sm text-stage-muted tabular-nums">
+              {winners.length - i}
+            </span>
+            <TicketCard
+              colorName={w.colorName}
+              colorHex={w.colorHex}
+              letter={w.letter}
+              number={w.number}
+              size="sm"
+            />
+            <div className="hidden min-w-0 flex-1 lg:block">
+              <p className="truncate text-sm font-medium">
+                {colorLabel(w.colorName, locale)} {w.letter} {formatNumber(w.number)}
+              </p>
+              {w.prizeName ? (
+                <p className="truncate text-xs text-stage-muted">{w.prizeName}</p>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </aside>
   );
 }
 

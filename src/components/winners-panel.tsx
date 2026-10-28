@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { openWinnersPrint } from "@/lib/export-pdf";
 import { colorLabel } from "@/lib/colors";
 import { localeTag, useI18n } from "@/lib/i18n";
+import { formatNumber } from "@/lib/tickets";
 import { useRaffleStore } from "@/lib/store";
 
 export function WinnersPanel() {
@@ -70,7 +71,7 @@ export function WinnersPanel() {
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">
-                  {colorLabel(w.colorName, locale)} {w.letter} {String(w.number).padStart(3, "0")}
+                  {colorLabel(w.colorName, locale)} {w.letter} {formatNumber(w.number)}
                 </p>
                 <p className="truncate text-sm text-muted">
                   {w.prizeName ?? t.noPrizeName} ·{" "}

@@ -1,4 +1,5 @@
 import { colorFromName, hexForColorName } from "@/lib/colors";
+import { pickIndex, type DrawMode } from "@/lib/fair-draw";
 import type { PoolTicket, TicketBook, Winner } from "@/lib/types";
 
 export const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZÆØÅ".split("");
@@ -8,8 +9,13 @@ export function ticketKey(bookId: string, number: number) {
   return `${bookId}:${number}`;
 }
 
+/** Ticket numbers are printed with two digits: 01, 02 … 25. */
+export function formatNumber(number: number) {
+  return String(number).padStart(2, "0");
+}
+
 export function formatTicket(colorName: string, letter: string, number: number) {
-  return `${colorName} ${letter} ${String(number).padStart(3, "0")}`;
+  return `${colorName} ${letter} ${formatNumber(number)}`;
 }
 
 export function expandPool(books: TicketBook[], drawnKeys: Iterable<string>): PoolTicket[] {
@@ -32,29 +38,6 @@ export function expandPool(books: TicketBook[], drawnKeys: Iterable<string>): Po
   return pool;
 }
 
-export const MAX_SAME = 2;
-
-/** Tickets still for sale, minus colors or letters that already won twice. */
-export function eligiblePool(
-  books: TicketBook[],
-  drawnKeys: Iterable<string>,
-  winners: Pick<Winner, "colorName" | "letter">[],
-): PoolTicket[] {
-  const colors = new Map<string, number>();
-  const letters = new Map<string, number>();
-  for (const winner of winners) {
-    const color = winner.colorName.trim().toUpperCase();
-    const letter = winner.letter.trim().toUpperCase();
-    colors.set(color, (colors.get(color) ?? 0) + 1);
-    letters.set(letter, (letters.get(letter) ?? 0) + 1);
-  }
-  return expandPool(books, drawnKeys).filter((ticket) => {
-    const color = ticket.colorName.trim().toUpperCase();
-    const letter = ticket.letter.trim().toUpperCase();
-    return (colors.get(color) ?? 0) < MAX_SAME && (letters.get(letter) ?? 0) < MAX_SAME;
-  });
-}
-
 export function remainingInBook(book: TicketBook, drawnKeys: Iterable<string>) {
   const drawn = drawnKeys instanceof Set ? drawnKeys : new Set(drawnKeys);
   let count = 0;
@@ -68,23 +51,12 @@ export function bookSize(book: Pick<TicketBook, "from" | "to">) {
   return Math.max(0, book.to - book.from + 1);
 }
 
-/** Unbiased index in [0, length). */
-export function randomIndex(length: number) {
-  if (length <= 0) return 0;
-  const max = 0x1_0000_0000;
-  const limit = max - (max % length);
-  const buf = new Uint32Array(1);
-  let x = 0;
-  do {
-    crypto.getRandomValues(buf);
-    x = buf[0]!;
-  } while (x >= limit);
-  return x % length;
-}
-
-export function pickTicket(pool: PoolTicket[]): PoolTicket | null {
-  if (pool.length === 0) return null;
-  return pool[randomIndex(pool.length)] ?? null;
+export function pickTicket(
+  pool: PoolTicket[],
+  winners: Pick<Winner, "colorName" | "letter" | "number">[],
+  mode: DrawMode,
+): PoolTicket | null {
+  return pool[pickIndex(pool, winners, mode)] ?? null;
 }
 
 export function winnerFromTicket(
@@ -111,24 +83,66 @@ export type ParsedBookLine = {
   to: number;
 };
 
-export function parseBookLine(line: string): ParsedBookLine | null {
+/** "A", "A-Y" or "A,C,F-H" → letters. Ranges only within BOOK_LETTERS / LETTERS. */
+export function parseLetters(spec: string): string[] | null {
+  const out: string[] = [];
+  for (const part of spec.toUpperCase().split(",")) {
+    const p = part.trim();
+    if (!p) continue;
+    const range = p.match(/^(\p{L})\s*[-–—]\s*(\p{L})$/u);
+    if (range) {
+      const a = LETTERS.indexOf(range[1]!);
+      const b = LETTERS.indexOf(range[2]!);
+      if (a < 0 || b < a) return null;
+      out.push(...LETTERS.slice(a, b + 1));
+    } else if (/^[\p{L}\d]{1,8}$/u.test(p)) {
+      out.push(p);
+    } else {
+      return null;
+    }
+  }
+  return out.length ? [...new Set(out)] : null;
+}
+
+/** "1-100", "7" or "1-20, 25, 30-40" → ranges. */
+export function parseNumbers(spec: string): [number, number][] | null {
+  const out: [number, number][] = [];
+  for (const part of spec.split(",")) {
+    const p = part.trim();
+    if (!p) continue;
+    const m = p.match(/^(\d+)(?:\s*(?:[-–—]|to|til)\s*(\d+))?$/i);
+    if (!m) return null;
+    const from = Number(m[1]);
+    const to = m[2] ? Number(m[2]) : from;
+    if (from < 1 || to < from || to > 9999) return null;
+    out.push([from, to]);
+  }
+  return out.length ? out : null;
+}
+
+/** Color words meaning "all four book colors". */
+const ALL_COLORS_WORDS = ["alle", "all", "tümü", "tumu", "hepsi"];
+
+/** "Rosa A 1-25", "Alle A-C 1-25", "Gul B,C 1-10, 12" → one row per color, letter and range. */
+export function parseBookLine(line: string): ParsedBookLine[] {
   const trimmed = line.trim();
-  if (!trimmed || trimmed.startsWith("#")) return null;
-  const match = trimmed.match(/^(.+?)\s+(\S+)\s+(\d+)\s*[-–—to]+\s*(\d+)$/i);
-  if (!match) return null;
+  if (!trimmed || trimmed.startsWith("#")) return [];
+  const match = trimmed.match(/^(.+?)\s+(\p{L}(?:\s*[-–—,]\s*\p{L})*|[\p{L}\d]{1,8})\s+(\d[\d\s,–—-]*|\d+\s*(?:to|til)\s*\d+)$/iu);
+  if (!match) return [];
   const colorName = match[1]!.trim();
-  const letter = match[2]!.trim().toUpperCase();
-  const from = Number(match[3]);
-  const to = Number(match[4]);
-  if (!colorName || !letter || from < 1 || to < from) return null;
-  return { colorName, letter, from, to };
+  const letters = parseLetters(match[2]!);
+  const ranges = parseNumbers(match[3]!);
+  if (!colorName || !letters || !ranges) return [];
+  const colors = ALL_COLORS_WORDS.includes(colorName.toLocaleLowerCase("nb"))
+    ? [...BOOK_COLORS]
+    : [colorName];
+  return letters.flatMap((letter) =>
+    colors.flatMap((name) => ranges.map(([from, to]) => ({ colorName: name, letter, from, to }))),
+  );
 }
 
 export function parseBookLines(text: string): ParsedBookLine[] {
-  return text
-    .split(/\n+/)
-    .map(parseBookLine)
-    .filter((row): row is ParsedBookLine => row !== null);
+  return text.split(/\n+/).flatMap(parseBookLine);
 }
 
 export function bookFromParsed(parsed: ParsedBookLine): TicketBook {
@@ -143,9 +157,17 @@ export function bookFromParsed(parsed: ParsedBookLine): TicketBook {
   };
 }
 
-export const EXAMPLE_BOOKS: Omit<TicketBook, "id">[] = [
-  { colorName: "Rød", colorHex: "#C62828", letter: "A", from: 1, to: 100 },
-  { colorName: "Blå", colorHex: "#1565C0", letter: "A", from: 1, to: 100 },
-  { colorName: "Gul", colorHex: "#D4A017", letter: "A", from: 1, to: 100 },
-  { colorName: "Grønn", colorHex: "#2E7D32", letter: "A", from: 1, to: 100 },
-];
+/** The four colors in a standard loddbok (Europris «Loddbok A–Y»). */
+export const BOOK_COLORS = ["Rosa", "Grønn", "Gul", "Blå"] as const;
+export const BOOK_FROM = 1;
+export const BOOK_TO = 25;
+
+export const EXAMPLE_BOOKS: Omit<TicketBook, "id">[] = ["A", "B"].flatMap((letter) =>
+  BOOK_COLORS.map((colorName) => ({
+    colorName,
+    colorHex: hexForColorName(colorName),
+    letter,
+    from: BOOK_FROM,
+    to: BOOK_TO,
+  })),
+);

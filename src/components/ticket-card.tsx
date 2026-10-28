@@ -1,5 +1,6 @@
 import { colorLabel, ticketInk } from "@/lib/colors";
 import { useI18n } from "@/lib/i18n";
+import { formatNumber } from "@/lib/tickets";
 import { cn } from "@/lib/utils";
 
 type Size = "sm" | "md" | "lg" | "hero";
@@ -8,7 +9,7 @@ const sizes: Record<Size, string> = {
   sm: "h-16 w-[7.5rem] text-[0.55rem]",
   md: "h-[5.5rem] w-[11.5rem] text-[0.7rem]",
   lg: "h-36 w-[18rem] text-sm",
-  hero: "h-52 w-[min(100%,22rem)] text-base sm:h-56 sm:w-[24rem]",
+  hero: "h-52 w-[min(calc(100vw-2rem),22rem)] text-base sm:h-56 sm:w-[24rem]",
 };
 
 type Props = {
@@ -34,7 +35,7 @@ export function TicketCard({
   const ink = ticketInk(colorHex);
   const name = colorLabel(colorName, locale);
   const num =
-    typeof number === "number" ? String(number).padStart(3, "0") : (number ?? "•••");
+    typeof number === "number" ? formatNumber(number) : (number ?? "••");
 
   return (
     <div

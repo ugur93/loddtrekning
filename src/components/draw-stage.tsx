@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { DrawOverlay } from "@/components/draw-overlay";
@@ -6,9 +6,12 @@ import { TicketCard } from "@/components/ticket-card";
 import { Button } from "@/components/ui/button";
 import { getDrawMuted, setDrawMuted, unlockDrawAudio } from "@/lib/draw-audio";
 import { useI18n } from "@/lib/i18n";
-import { eligiblePool, expandPool } from "@/lib/tickets";
+import { colorLabel } from "@/lib/colors";
+import { colorChances } from "@/lib/fair-draw";
+import { expandPool } from "@/lib/tickets";
 import type { Winner } from "@/lib/types";
 import { useRaffleStore } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 export function DrawStage() {
   const books = useRaffleStore((s) => s.books);
@@ -16,13 +19,19 @@ export function DrawStage() {
   const prizes = useRaffleStore((s) => s.prizes);
   const winners = useRaffleStore((s) => s.winners);
   const draw = useRaffleStore((s) => s.draw);
-  const soldLeft = expandPool(books, drawnKeys).length;
-  const remaining = eligiblePool(books, drawnKeys, winners).length;
+  const drawMode = useRaffleStore((s) => s.drawMode);
+  const setDrawMode = useRaffleStore((s) => s.setDrawMode);
+  const pool = useMemo(() => expandPool(books, drawnKeys), [books, drawnKeys]);
+  const remaining = pool.length;
+  const chances = useMemo(
+    () => (pool.length ? colorChances(pool, winners, drawMode) : []),
+    [pool, winners, drawMode],
+  );
   const last = winners[0];
   const nextPrize = prizes[0];
   const [live, setLive] = useState<{ winner: Winner; remaining: number } | null>(null);
   const [muted, setMuted] = useState(false);
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
 
   useEffect(() => {
     setMuted(getDrawMuted());
@@ -32,13 +41,7 @@ export function DrawStage() {
     unlockDrawAudio();
     const result = draw();
     if (!result.ok) {
-      toast.error(
-        result.reason === "empty"
-          ? t.needBooks
-          : result.reason === "capped"
-            ? t.limitReached
-            : t.noneLeft,
-      );
+      toast.error(result.reason === "empty" ? t.needBooks : t.noneLeft);
       return;
     }
     setLive({ winner: result.winner, remaining: result.remaining });
@@ -103,6 +106,62 @@ export function DrawStage() {
             {t.drawWinner}
           </Button>
 
+          <div className="mt-6 w-full max-w-md">
+            <div
+              role="radiogroup"
+              aria-label={t.drawMode}
+              className="mx-auto grid w-fit grid-cols-2 gap-1 rounded-md bg-stage-fg/10 p-1 text-sm"
+            >
+              {(["balanced", "random"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={drawMode === mode}
+                  onClick={() => setDrawMode(mode)}
+                  className={cn(
+                    "h-9 rounded-sm px-3",
+                    drawMode === mode
+                      ? "bg-stage-fg text-stage"
+                      : "text-stage-muted hover:text-stage-fg",
+                  )}
+                >
+                  {mode === "balanced" ? t.balanced : t.pureRandom}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-stage-muted">
+              {drawMode === "balanced" ? t.balancedHint : t.randomHint}
+            </p>
+            {chances.length > 1 ? (
+              <div className="mt-4 text-left">
+                <p className="mb-1.5 text-center text-xs tracking-widest text-stage-muted uppercase">
+                  {t.chanceNext}
+                </p>
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-stage-fg/10">
+                  {chances.map((c) => (
+                    <div
+                      key={c.colorName}
+                      className="h-full transition-[width] duration-500"
+                      style={{ width: `${c.chance * 100}%`, backgroundColor: c.colorHex }}
+                    />
+                  ))}
+                </div>
+                <ul className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-stage-muted tabular-nums">
+                  {chances.map((c) => (
+                    <li key={c.colorName} className="flex items-center gap-1.5">
+                      <span
+                        className="size-2.5 rounded-full shadow-[0_0_0_1px_rgb(255_255_255/0.25)]"
+                        style={{ backgroundColor: c.colorHex }}
+                      />
+                      {colorLabel(c.colorName, locale)} {Math.round(c.chance * 100)}%
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+
           {last && !live ? (
             <div className="mt-10">
               <p className="mb-3 text-xs tracking-widest text-stage-muted uppercase">{t.lastDrawn}</p>
@@ -117,8 +176,6 @@ export function DrawStage() {
                 <p className="mt-3 text-sm text-stage-muted">{last.prizeName}</p>
               ) : null}
             </div>
-          ) : remaining === 0 && soldLeft > 0 ? (
-            <p className="mt-8 text-sm text-stage-muted">{t.limitReached}</p>
           ) : remaining === 0 && books.length > 0 ? (
             <p className="mt-8 text-sm text-stage-muted">{t.allDrawn}</p>
           ) : null}
@@ -134,7 +191,7 @@ export function DrawStage() {
             unlockDrawAudio();
             const result = draw();
             if (!result.ok) {
-              toast.error(result.reason === "capped" ? t.limitReached : t.noneLeft);
+              toast.error(t.noneLeft);
               setLive(null);
               return;
             }

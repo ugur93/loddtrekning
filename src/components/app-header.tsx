@@ -5,21 +5,19 @@ import { LocaleSwitch } from "@/components/locale-switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/lib/i18n";
-import { eligiblePool } from "@/lib/tickets";
-import { useRaffleStore } from "@/lib/store";
+import { usePoolCount, useRaffleStore } from "@/lib/store";
 
 export function AppHeader() {
   const eventName = useRaffleStore((s) => s.eventName);
   const setEventName = useRaffleStore((s) => s.setEventName);
   const books = useRaffleStore((s) => s.books);
-  const drawnKeys = useRaffleStore((s) => s.drawnKeys);
   const winners = useRaffleStore((s) => s.winners);
   const undoLast = useRaffleStore((s) => s.undoLast);
   const newRound = useRaffleStore((s) => s.newRound);
   const resetAll = useRaffleStore((s) => s.resetAll);
   const stageMode = useRaffleStore((s) => s.stageMode);
   const setStageMode = useRaffleStore((s) => s.setStageMode);
-  const remaining = eligiblePool(books, drawnKeys, winners).length;
+  const remaining = usePoolCount();
   const [confirm, setConfirm] = useState<"round" | "reset" | null>(null);
   const { t } = useI18n();
 
@@ -112,7 +110,7 @@ export function AppHeader() {
         <p className="text-sm text-muted tabular-nums sm:pb-2.5">
           {t.remaining(remaining)}
           {winners.length ? ` · ${t.drawnCount(winners.length)}` : ""}
-          {books.length ? ` · ${t.bookCount(books.length)}` : ""}
+          {books.length ? ` · ${t.bookCount(new Set(books.map((b) => b.letter)).size)}` : ""}
         </p>
       </div>
     </header>

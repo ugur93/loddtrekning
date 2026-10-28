@@ -1,3 +1,5 @@
+import type { DrawMode } from "@/lib/fair-draw";
+
 export type TicketBook = {
   id: string;
   colorName: string;
@@ -41,4 +43,5 @@ export type RaffleSnapshot = {
   winners: Winner[];
   drawnKeys: string[];
   stageMode: boolean;
+  drawMode: DrawMode;
 };

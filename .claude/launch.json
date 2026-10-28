@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "loddtrekning",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "vite.pages.config.ts", "--port", "5173", "--strictPort"],
+      "port": 5173
+    }
+  ]
+}

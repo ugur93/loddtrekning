@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
+import { WinnersRail } from "@/components/draw-overlay";
 import { DrawStage } from "@/components/draw-stage";
 import { LocaleSwitch } from "@/components/locale-switch";
-import { TicketCard } from "@/components/ticket-card";
 import { useI18n } from "@/lib/i18n";
 import { useRaffleStore } from "@/lib/store";
 
@@ -30,23 +30,12 @@ export function StageMode() {
           </button>
         </div>
       </header>
-      <div className="flex flex-1 flex-col justify-center px-4 pb-6">
-        <DrawStage />
-      </div>
-      {winners.length > 0 ? (
-        <div className="flex gap-3 overflow-x-auto px-4 pb-5">
-          {winners.slice(0, 8).map((w) => (
-            <TicketCard
-              key={w.id}
-              colorName={w.colorName}
-              colorHex={w.colorHex}
-              letter={w.letter}
-              number={w.number}
-              size="sm"
-            />
-          ))}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="flex flex-1 flex-col justify-center px-4 pb-6">
+          <DrawStage />
         </div>
-      ) : null}
+        <WinnersRail winners={winners} />
+      </div>
     </div>
   );
 }

@@ -64,13 +64,13 @@ function EmptyIntro({ onExample }: { onExample: () => void }) {
           </div>
         </div>
         <div className="hidden shrink-0 lg:flex lg:-space-x-10">
-          {EXAMPLE_BOOKS.map((b, i) => (
+          {EXAMPLE_BOOKS.slice(0, 4).map((b, i) => (
             <div key={b.colorName} style={{ transform: `rotate(${(i - 1.5) * 6}deg)` }}>
               <TicketCard
                 colorName={b.colorName}
                 colorHex={b.colorHex}
                 letter={b.letter}
-                number={17 + i * 11}
+                number={1 + i * 6}
                 size="md"
               />
             </div>

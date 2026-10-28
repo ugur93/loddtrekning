@@ -5,11 +5,12 @@ export type PaletteColor = {
 };
 
 export const PALETTE: PaletteColor[] = [
+  // The four pastel colors of a standard loddbok come first.
+  { name: "Rosa", hex: "#F2A6C2", aliases: ["rosa", "pink", "pembe"] },
+  { name: "Grønn", hex: "#A3D39C", aliases: ["gronn", "grønn", "green", "yesil", "yeşil"] },
+  { name: "Gul", hex: "#F1DE7E", aliases: ["gul", "yellow", "gull", "sari", "sarı"] },
+  { name: "Blå", hex: "#9DC3EA", aliases: ["bla", "blå", "blue", "mavi"] },
   { name: "Rød", hex: "#C62828", aliases: ["rod", "red", "rød", "kirmizi", "kırmızı"] },
-  { name: "Blå", hex: "#1565C0", aliases: ["bla", "blå", "blue", "mavi"] },
-  { name: "Gul", hex: "#D4A017", aliases: ["gul", "yellow", "gull", "sari", "sarı"] },
-  { name: "Grønn", hex: "#2E7D32", aliases: ["gronn", "grønn", "green", "yesil", "yeşil"] },
-  { name: "Rosa", hex: "#C2185B", aliases: ["rosa", "pink", "pembe"] },
   { name: "Oransje", hex: "#E65100", aliases: ["oransje", "orange", "turuncu"] },
   { name: "Turkis", hex: "#00838F", aliases: ["turkis", "cyan", "teal", "turkuaz"] },
   { name: "Lilla", hex: "#5E35B1", aliases: ["lilla", "fiolett", "purple", "violet", "mor"] },
