@@ -79,7 +79,7 @@ const nb = {
   balanced: "Balansert",
   pureRandom: "Helt tilfeldig",
   balancedHint:
-    "Alle lodd har alltid en sjanse. Farger, bokstaver og nummer som har vunnet mer enn sin andel, får litt lavere sjanse, så de samme ikke kommer opp hele tiden.",
+    "Farger, bokstaver og nummer som har vunnet mer enn sin andel, får litt lavere sjanse. Har samme farge eller bokstav vunnet to ganger på rad, må neste vinner være en annen.",
   randomHint: "Alle lodd som er igjen, har nøyaktig like stor sjanse.",
   chanceNext: "Sjanse i neste trekning",
   winnersSoFar: "Vinnere så langt",
@@ -198,7 +198,7 @@ const tr: Msg = {
   balanced: "Dengeli",
   pureRandom: "Tamamen rastgele",
   balancedHint:
-    "Her biletin her zaman şansı vardır. Payından fazla kazanan renk, harf ve numaraların şansı biraz azalır, böylece aynıları sürekli çıkmaz.",
+    "Payından fazla kazanan renk, harf ve numaraların şansı biraz azalır. Aynı renk veya harf art arda iki kez kazandıysa, sıradaki kazanan farklı olmalıdır.",
   randomHint: "Kalan tüm biletlerin şansı tamamen eşittir.",
   chanceNext: "Sıradaki çekilişte şans",
   winnersSoFar: "Şimdiye kadarki kazananlar",

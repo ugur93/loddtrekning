@@ -45,6 +45,19 @@ test("every ticket keeps a chance", () => {
   for (const w of drawWeights(pool, winners)) assert.ok(w > 0);
 });
 
+test("same color or letter never wins three times in a row while others remain", () => {
+  const all = books([["Rosa", ["A", "B"], 1, 25], ["Blå", ["A", "B"], 1, 25]]);
+  for (let round = 0; round < 200; round++) {
+    const w = run(all, 30, "balanced");
+    for (let i = 2; i < w.length; i++) {
+      for (const key of ["colorName", "letter"] as const) {
+        const triple = w[i]![key] === w[i - 1]![key] && w[i]![key] === w[i - 2]![key];
+        assert.ok(!triple, `${key} three in a row at draw ${i + 1}`);
+      }
+    }
+  }
+});
+
 test("raffle never stalls and draws every ticket once", () => {
   const all = books([["Rød", AY.slice(0, 5), 1, 4], ["Blå", ["A", "B"], 1, 4]]);
   const winners = run(all, Infinity, "balanced");

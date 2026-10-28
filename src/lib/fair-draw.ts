@@ -9,7 +9,7 @@ type Ticket = Pick<PoolTicket, "colorName" | "letter" | "number">;
 const OVER_SHARE = 0.2;
 /** Extra damping when a group also won the previous draw (scaled by how small it is). */
 const REPEAT = 0.65;
-/** No ticket ever drops below this fraction of a normal ticket's chance. */
+/** Outside a streak block, no ticket drops below this fraction of a normal ticket's chance. */
 const FLOOR = 0.02;
 
 const dimensions: ((t: Ticket) => string)[] = [
@@ -69,11 +69,27 @@ export function drawWeights(pool: Ticket[], winners: Past[]): number[] {
     }
   }
 
-  return pool.map((t) => {
+  const weights = pool.map((t) => {
     let w = 1;
     for (const keyOf of dimensions) w *= factor.get(keyOf(t)) ?? 1;
     return Math.max(FLOOR, w);
   });
+
+  // A color or letter that won the last two draws sits out the next one,
+  // unless nothing else is left.
+  const blocked = streakKeys(winners);
+  if (blocked.length === 0) return weights;
+  const open = pool.map((t) => !blocked.some((key) => streakDimensions.some((k) => k(t) === key)));
+  return open.some(Boolean) ? weights.map((w, i) => (open[i] ? w : 0)) : weights;
+}
+
+const streakDimensions = dimensions.slice(0, 2);
+
+/** Color and letter keys shared by the two latest winners. */
+function streakKeys(winners: Past[]) {
+  const [newest, previous] = winners;
+  if (!newest || !previous) return [];
+  return streakDimensions.map((k) => k(newest)).filter((key, i) => key === streakDimensions[i]!(previous));
 }
 
 export function pickIndex(pool: Ticket[], winners: Past[], mode: DrawMode): number {
