@@ -1,13 +1,14 @@
-/** Tombola bed + SFX. Unlock from a click, then the overlay can play. */
+/** Draw music + SFX, all synthesized. Unlock from a click, then the overlay can play. */
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let musicBus: GainNode | null = null;
 let sfxBus: GainNode | null = null;
 let muted = false;
-let ambience: { stop: () => void; setEnergy: (n: number) => void } | null = null;
+let music: { stop: () => void; setStage: (n: number) => void; hit: (reel: number) => void } | null =
+  null;
+let fanfareOut: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
-let energyGain: GainNode | null = null;
 let lastTickAt = 0;
 
 const MUTE_KEY = "lodd-sound-muted";
@@ -42,14 +43,21 @@ function ensureGraph() {
   master = ctx.createGain();
   musicBus = ctx.createGain();
   sfxBus = ctx.createGain();
-  musicBus.gain.value = 0.55;
+  musicBus.gain.value = 0.8;
   sfxBus.gain.value = 0.9;
   muted = getDrawMuted();
   master.gain.value = muted ? 0 : 0.7;
+  // Glue + safety: many voices stack up during the fanfare.
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14;
+  comp.ratio.value = 4;
+  comp.attack.value = 0.004;
+  comp.release.value = 0.2;
   musicBus.connect(master);
   sfxBus.connect(master);
-  master.connect(ctx.destination);
-  noiseBuf = makeNoise(ctx, 1.6);
+  master.connect(comp);
+  comp.connect(ctx.destination);
+  noiseBuf = makeNoise(ctx, 3);
 }
 
 function makeNoise(ac: AudioContext, seconds: number) {
@@ -79,179 +87,324 @@ if (typeof document !== "undefined") {
   });
 }
 
-export function stopDrawAmbience() {
-  ambience?.stop();
-  ambience = null;
-  energyGain = null;
+// ---------- instruments ----------
+
+const midi = (n: number) => 440 * 2 ** ((n - 69) / 12);
+
+function cleanup(...nodes: AudioNode[]) {
+  return () => nodes.forEach((n) => n.disconnect());
 }
 
-export function setSpinEnergy(value: number) {
-  if (!ctx || !energyGain) return;
-  const v = Math.max(0.05, Math.min(1, value));
-  energyGain.gain.setTargetAtTime(v, ctx.currentTime, 0.12);
+function noiseHit(
+  out: AudioNode,
+  t: number,
+  type: BiquadFilterType,
+  freq: number,
+  vol: number,
+  decay: number,
+  q = 0.7,
+) {
+  const ac = out.context as AudioContext;
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuf;
+  src.playbackRate.value = 0.9 + Math.random() * 0.2;
+  const f = ac.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = freq;
+  f.Q.value = q;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  src.connect(f);
+  f.connect(g);
+  g.connect(out);
+  src.onended = cleanup(src, f, g);
+  src.start(t, Math.random() * 0.5);
+  src.stop(t + decay + 0.02);
+}
+
+function tone(
+  out: AudioNode,
+  t: number,
+  freq: number,
+  type: OscillatorType,
+  vol: number,
+  decay: number,
+  opts: { attack?: number; cutoff?: number; glideTo?: number; detune?: number } = {},
+) {
+  const ac = out.context as AudioContext;
+  const osc = ac.createOscillator();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  if (opts.glideTo) osc.frequency.exponentialRampToValueAtTime(opts.glideTo, t + decay * 0.6);
+  if (opts.detune) osc.detune.value = opts.detune;
+  const f = ac.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.value = opts.cutoff ?? 12000;
+  const g = ac.createGain();
+  const attack = opts.attack ?? 0.004;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  osc.connect(f);
+  f.connect(g);
+  g.connect(out);
+  osc.onended = cleanup(osc, f, g);
+  osc.start(t);
+  osc.stop(t + attack + decay + 0.02);
+}
+
+const hat = (out: AudioNode, t: number, vol = 0.05, open = false) =>
+  noiseHit(out, t, "highpass", 7500, vol, open ? 0.16 : 0.035);
+function snare(out: AudioNode, t: number, vol = 0.22) {
+  noiseHit(out, t, "bandpass", 1900, vol, 0.13, 0.6);
+  tone(out, t, 196, "triangle", vol * 0.5, 0.06);
+}
+const crash = (out: AudioNode, t: number, vol = 0.3) =>
+  noiseHit(out, t, "highpass", 3200, vol, 1.9, 0.5);
+
+/** Two detuned saws through an opening filter: a cheap brass section. */
+function brass(out: AudioNode, t: number, freq: number, dur: number, vol = 0.09) {
+  const ac = out.context as AudioContext;
+  const f = ac.createBiquadFilter();
+  f.type = "lowpass";
+  f.Q.value = 1.2;
+  f.frequency.setValueAtTime(500, t);
+  f.frequency.exponentialRampToValueAtTime(3200, t + 0.06);
+  f.frequency.exponentialRampToValueAtTime(1500, t + Math.max(0.1, dur));
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.03);
+  g.gain.setTargetAtTime(vol * 0.75, t + 0.05, 0.1);
+  g.gain.setTargetAtTime(0.0001, t + dur, 0.09);
+  f.connect(g);
+  g.connect(out);
+  const oscs = [-7, 7].map((cents) => {
+    const o = ac.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.value = freq;
+    o.detune.value = cents;
+    o.connect(f);
+    o.start(t);
+    o.stop(t + dur + 0.5);
+    return o;
+  });
+  oscs[0]!.onended = cleanup(...oscs, f, g);
+}
+
+function chime(out: AudioNode, t: number, freq: number, vol = 0.05) {
+  tone(out, t, freq, "sine", vol, 1.1);
+  tone(out, t, freq * 2.01, "sine", vol * 0.35, 0.6);
+}
+
+function applause(out: AudioNode, t: number, seconds: number) {
+  const claps = Math.round(seconds * 70);
+  for (let i = 0; i < claps; i++) {
+    const at = t + Math.random() * seconds;
+    const fade = 1 - (at - t) / seconds;
+    noiseHit(out, at, "bandpass", 900 + Math.random() * 1800, 0.05 * fade + 0.005, 0.03, 1.4);
+  }
+}
+
+const timpani = (out: AudioNode, t: number, freq: number, vol = 0.45) => {
+  tone(out, t, freq * 1.4, "sine", vol, 0.55, { glideTo: freq });
+  noiseHit(out, t, "lowpass", 260, vol * 0.4, 0.09);
+};
+const pizz = (out: AudioNode, t: number, freq: number, vol = 0.05) =>
+  tone(out, t, freq, "triangle", vol, 0.14, { cutoff: 2600 });
+/** Tick-tock of a clock: a short, tuned woodblock. */
+const clock = (out: AudioNode, t: number, high: boolean, vol = 0.07) =>
+  noiseHit(out, t, "bandpass", high ? 2600 : 1900, vol, 0.025, 8);
+
+/** Detuned saws with a slowly opening filter: a string section swell. */
+function strings(out: AudioNode, t: number, notes: number[], dur: number, vol = 0.03) {
+  const ac = out.context as AudioContext;
+  const f = ac.createBiquadFilter();
+  f.type = "lowpass";
+  f.frequency.setValueAtTime(400, t);
+  f.frequency.exponentialRampToValueAtTime(2400, t + dur);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + dur * 0.8);
+  g.gain.setTargetAtTime(0.0001, t + dur, 0.05);
+  f.connect(g);
+  g.connect(out);
+  const oscs = notes.flatMap((n) =>
+    [-9, 9].map((cents) => {
+      const o = ac.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = midi(n);
+      o.detune.value = cents;
+      o.connect(f);
+      o.start(t);
+      o.stop(t + dur + 0.4);
+      return o;
+    }),
+  );
+  oscs[0]!.onended = cleanup(...oscs, f, g);
+}
+
+// ---------- spin music: a countdown in D minor ----------
+
+const BPM = 125;
+/** One beat in ms. Reel landings are placed on this grid so they hit with the music. */
+export const BEAT_MS = 60000 / BPM;
+/** Music starts this long after the draw begins. */
+export const MUSIC_LEAD_MS = 30;
+const STEP = 60 / BPM / 4; // one 16th note
+/** Dm – B♭ – Gm – A, one bar each. Bass root and a triad around middle C (MIDI). */
+const BARS = [
+  { root: 38, chord: [62, 65, 69] },
+  { root: 34, chord: [62, 65, 70] },
+  { root: 31, chord: [62, 67, 70] },
+  { root: 33, chord: [61, 64, 69] },
+];
+const MOTIF = [0, 2, 1, 2, 0, 2, 1, 2];
+/** Spin music gets louder as each reel locks. */
+const STAGE_LEVEL = [1, 1.1, 1.25, 1.4];
+
+export function stopDrawAmbience() {
+  music?.stop();
+  music = null;
+}
+
+/** Fade out everything: spin music and any fanfare tail. */
+export function stopDrawSound() {
+  stopDrawAmbience();
+  if (ctx && fanfareOut) {
+    const out = fanfareOut;
+    out.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.08);
+    window.setTimeout(() => out.disconnect(), 600);
+  }
+  fanfareOut = null;
+}
+
+/** 0 = all reels spinning … 3 = all locked (roll into the reveal). */
+export function setSpinStage(stage: number) {
+  music?.setStage(stage);
+}
+
+/** A reel just landed: timpani + a bell in the chord that is playing right now. */
+export function playLock(reel: number) {
+  if (music) {
+    music.hit(reel);
+    return;
+  }
+  if (!ctx || !sfxBus) return;
+  timpani(sfxBus, ctx.currentTime, midi(38));
+  chime(sfxBus, ctx.currentTime, midi(74 + reel * 4), 0.08);
 }
 
 export function startDrawAmbience() {
-  stopDrawAmbience();
+  stopDrawSound();
   ensureGraph();
   if (!ctx || !musicBus || !noiseBuf) return;
   if (ctx.state === "suspended") void ctx.resume();
   const ac = ctx;
-  const bus = musicBus;
-  const buf = noiseBuf;
-  const now = ac.currentTime;
+  const out = ac.createGain();
+  out.gain.value = STAGE_LEVEL[0]!;
+  out.connect(musicBus);
 
-  const energy = ac.createGain();
-  energy.gain.value = 1;
-  energy.connect(bus);
-  energyGain = energy;
-
-  const cage = ac.createBufferSource();
-  cage.buffer = buf;
-  cage.loop = true;
-  const cageLp = ac.createBiquadFilter();
-  cageLp.type = "lowpass";
-  cageLp.frequency.value = 420;
-  cageLp.Q.value = 0.7;
-  const cageGain = ac.createGain();
-  cageGain.gain.setValueAtTime(0.0001, now);
-  cageGain.gain.exponentialRampToValueAtTime(0.22, now + 0.45);
-  cage.connect(cageLp);
-  cageLp.connect(cageGain);
-  cageGain.connect(energy);
-  cage.start(now);
-
-  const lfo = ac.createOscillator();
-  lfo.type = "sine";
-  lfo.frequency.value = 2.4;
-  const lfoGain = ac.createGain();
-  lfoGain.gain.value = 180;
-  lfo.connect(lfoGain);
-  lfoGain.connect(cageLp.frequency);
-  lfo.start(now);
-
-  const drone = ac.createOscillator();
-  drone.type = "sine";
-  drone.frequency.value = 98;
-  const drone2 = ac.createOscillator();
-  drone2.type = "sine";
-  drone2.frequency.value = 147;
-  const droneG = ac.createGain();
-  droneG.gain.setValueAtTime(0.0001, now);
-  droneG.gain.exponentialRampToValueAtTime(0.07, now + 0.6);
-  drone.connect(droneG);
-  drone2.connect(droneG);
-  droneG.connect(energy);
-  drone.start(now);
-  drone2.start(now);
-
-  const rise = ac.createOscillator();
-  rise.type = "triangle";
-  rise.frequency.setValueAtTime(110, now);
-  rise.frequency.linearRampToValueAtTime(220, now + 3.2);
-  const riseG = ac.createGain();
-  riseG.gain.setValueAtTime(0.0001, now);
-  riseG.gain.exponentialRampToValueAtTime(0.04, now + 2.6);
-  rise.connect(riseG);
-  riseG.connect(energy);
-  rise.start(now);
-
-  const waltz = [196, 246.94, 293.66, 246.94, 329.63, 246.94, 293.66, 196];
+  const start = ac.currentTime + MUSIC_LEAD_MS / 1000;
+  let stage = 0;
   let step = 0;
-  const noteId = window.setInterval(() => {
-    if (!ctx || !musicBus) return;
-    const t = ctx.currentTime;
-    const freq = waltz[step % waltz.length]!;
-    step += 1;
-    const osc = ctx.createOscillator();
-    osc.type = "triangle";
-    osc.frequency.value = freq;
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = 1100;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.018, t + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-    osc.connect(lp);
-    lp.connect(g);
-    g.connect(musicBus);
-    osc.onended = () => {
-      osc.disconnect();
-      lp.disconnect();
-      g.disconnect();
-    };
-    osc.start(t);
-    osc.stop(t + 0.58);
-  }, 420);
+  let nextAt = start;
+  let rollFrom = 0;
+  const barAt = (t: number) => BARS[Math.floor(Math.max(0, t - start) / (STEP * 16)) % BARS.length]!;
 
-  let cancelled = false;
-  let nextClack = now + 0.12;
-  let timer = 0;
-  const clack = () => {
-    if (cancelled || !ctx) return;
-    const t = ctx.currentTime;
-    if (nextClack < t - 0.04) nextClack = t + 0.02;
-    let made = 0;
-    while (nextClack < t + 0.18 && made < 2) {
-      const src = ac.createBufferSource();
-      src.buffer = buf;
-      const bp = ac.createBiquadFilter();
-      bp.type = "bandpass";
-      bp.frequency.value = 700 + Math.random() * 900;
-      bp.Q.value = 0.9;
-      const g = ac.createGain();
-      g.gain.setValueAtTime(0.0001, nextClack);
-      g.gain.exponentialRampToValueAtTime(0.08, nextClack + 0.006);
-      g.gain.exponentialRampToValueAtTime(0.0001, nextClack + 0.05);
-      src.connect(bp);
-      bp.connect(g);
-      g.connect(energy);
-      src.onended = () => {
-        src.disconnect();
-        bp.disconnect();
-        g.disconnect();
-      };
-      src.start(nextClack);
-      src.stop(nextClack + 0.06);
-      nextClack += 0.16 + Math.random() * 0.1;
-      made += 1;
+  // A rising noise sweep under everything builds tension.
+  const riser = ac.createBufferSource();
+  riser.buffer = noiseBuf;
+  riser.loop = true;
+  const riserF = ac.createBiquadFilter();
+  riserF.type = "bandpass";
+  riserF.Q.value = 2.5;
+  riserF.frequency.setValueAtTime(250, start);
+  riserF.frequency.exponentialRampToValueAtTime(4500, start + 6);
+  const riserG = ac.createGain();
+  riserG.gain.setValueAtTime(0.0001, start);
+  riserG.gain.exponentialRampToValueAtTime(0.05, start + 5.5);
+  riser.connect(riserF);
+  riserF.connect(riserG);
+  riserG.connect(out);
+  riser.start(start);
+
+  const playStep = (n: number, t: number) => {
+    const bar = BARS[Math.floor(n / 16) % BARS.length]!;
+    const inBar = n % 16;
+    if (stage >= 3) {
+      // Timpani + snare roll on the dominant (A), swelling into the D major reveal.
+      const k = Math.min(1, (t - rollFrom) / 0.9);
+      const dominant = BARS[3]!;
+      timpani(out, t, midi(dominant.root), 0.12 + k * 0.25);
+      snare(out, t, 0.06 + k * 0.2);
+      snare(out, t + STEP / 2, 0.06 + k * 0.2);
+      if (inBar % 4 === 0) {
+        strings(out, t, dominant.chord.map((c) => c + 12), STEP * 4, 0.035 + k * 0.03);
+      }
+      return;
     }
-    timer = window.setTimeout(clack, 110);
+    // Clock: tick-tock on every beat, 8ths once the first reel is in.
+    if (inBar % 4 === 0) clock(out, t, inBar % 8 === 0, 0.11);
+    else if (stage >= 1 && inBar % 2 === 0) clock(out, t, false, 0.035);
+    // Timpani on beats 1 and 3, every beat later.
+    if (inBar % 8 === 0 || (stage >= 1 && inBar % 4 === 0)) timpani(out, t, midi(bar.root), 0.45);
+    // Galloping low strings: da-da-DUM on every beat.
+    if (inBar % 4 !== 1) {
+      const accent = inBar % 4 === 0;
+      tone(out, t, midi(bar.root + 12), "sawtooth", accent ? 0.16 : 0.1, STEP * 0.9, {
+        cutoff: 900 + stage * 250,
+      });
+    }
+    // Pizzicato melody from the chord once a reel has landed.
+    if (stage >= 1 && n % 2 === 0) {
+      pizz(out, t, midi(bar.chord[MOTIF[(n / 2) % MOTIF.length]!]! + 12), 0.045 + stage * 0.01);
+    }
+    if (stage >= 2) {
+      if (inBar === 0) strings(out, t, bar.chord, STEP * 16, 0.03);
+      if (inBar % 2 === 1) hat(out, t, 0.03);
+      if (inBar === 4 || inBar === 12) snare(out, t, 0.16);
+    }
   };
-  clack();
 
-  ambience = {
-    setEnergy: (n: number) => {
-      energy.gain.setTargetAtTime(Math.max(0.05, Math.min(1, n)), ac.currentTime, 0.1);
+  const timer = window.setInterval(() => {
+    while (nextAt < ac.currentTime + 0.12) {
+      playStep(step, nextAt);
+      step += 1;
+      nextAt += STEP;
+    }
+  }, 25);
+
+  music = {
+    setStage: (n: number) => {
+      if (n >= 3 && stage < 3) rollFrom = ac.currentTime;
+      stage = n;
+      out.gain.setTargetAtTime(STAGE_LEVEL[Math.min(n, 3)]!, ac.currentTime, 0.15);
+    },
+    hit: (reel: number) => {
+      // Straight to the sfx bus, so the stage swell doesn't mask it.
+      const t = ac.currentTime;
+      const chord = barAt(t).chord;
+      const bus = sfxBus ?? out;
+      timpani(bus, t, midi(barAt(t).root), 0.55);
+      crash(bus, t, 0.08 + reel * 0.04);
+      chime(bus, t, midi(chord[reel % 3]! + 24), 0.09);
+      chime(bus, t + 0.04, midi(chord[(reel + 1) % 3]! + 24), 0.06);
     },
     stop: () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      window.clearInterval(noteId);
+      window.clearInterval(timer);
       const t = ac.currentTime;
-      cageGain.gain.setTargetAtTime(0.0001, t, 0.08);
-      droneG.gain.setTargetAtTime(0.0001, t, 0.08);
-      riseG.gain.setTargetAtTime(0.0001, t, 0.08);
+      out.gain.setTargetAtTime(0.0001, t, 0.04);
       window.setTimeout(() => {
         try {
-          cage.stop();
-          lfo.stop();
-          drone.stop();
-          drone2.stop();
-          rise.stop();
+          riser.stop();
         } catch {
           /* already stopped */
         }
-        try {
-          cageGain.disconnect();
-          droneG.disconnect();
-          riseG.disconnect();
-          energy.disconnect();
-        } catch {
-          /* already disconnected */
-        }
-      }, 280);
+        out.disconnect();
+        riserG.disconnect();
+        riserF.disconnect();
+      }, 400);
     },
   };
 }
@@ -282,91 +435,56 @@ export function playTick() {
   src.stop(t + 0.045);
 }
 
-export function playClunk() {
-  if (!ctx || !sfxBus || !noiseBuf) return;
-  const ac = ctx;
-  const bus = sfxBus;
-  const buf = noiseBuf;
-  const t = ac.currentTime;
-  const osc = ac.createOscillator();
-  osc.type = "sine";
-  osc.frequency.setValueAtTime(210, t);
-  osc.frequency.exponentialRampToValueAtTime(70, t + 0.09);
-  const og = ac.createGain();
-  og.gain.setValueAtTime(0.0001, t);
-  og.gain.exponentialRampToValueAtTime(0.34, t + 0.008);
-  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
-  osc.connect(og);
-  og.connect(bus);
-  osc.onended = () => {
-    osc.disconnect();
-    og.disconnect();
-  };
-  osc.start(t);
-  osc.stop(t + 0.12);
-
-  const src = ac.createBufferSource();
-  src.buffer = buf;
-  const lp = ac.createBiquadFilter();
-  lp.type = "lowpass";
-  lp.frequency.value = 640;
-  const ng = ac.createGain();
-  ng.gain.setValueAtTime(0.0001, t);
-  ng.gain.exponentialRampToValueAtTime(0.22, t + 0.006);
-  ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-  src.connect(lp);
-  lp.connect(ng);
-  ng.connect(bus);
-  src.onended = () => {
-    src.disconnect();
-    lp.disconnect();
-    ng.disconnect();
-  };
-  src.start(t);
-  src.stop(t + 0.09);
-}
-
+/** Winner reveal: crash and timpani, a brass call resolving to D major, sparkles and applause. */
 export function playFanfare() {
   stopDrawAmbience();
-  if (!ctx || !sfxBus || !noiseBuf) return;
+  ensureGraph();
+  if (!ctx || !musicBus || !noiseBuf) return;
   const ac = ctx;
-  const t = ac.currentTime;
-  const notes = [392, 523.25, 659.25, 783.99, 1046.5];
-  notes.forEach((freq, i) => {
-    const osc = ac.createOscillator();
-    osc.type = i > 2 ? "triangle" : "sine";
-    osc.frequency.value = freq;
-    const g = ac.createGain();
-    const start = t + i * 0.075;
-    g.gain.setValueAtTime(0.0001, start);
-    g.gain.exponentialRampToValueAtTime(0.2, start + 0.025);
-    g.gain.exponentialRampToValueAtTime(0.0001, start + 0.95);
-    osc.connect(g);
-    g.connect(sfxBus!);
-    osc.onended = () => {
-      osc.disconnect();
-      g.disconnect();
-    };
-    osc.start(start);
-    osc.stop(start + 1);
-  });
+  const out = ac.createGain();
+  out.gain.value = 1;
+  out.connect(musicBus);
+  fanfareOut = out;
+  const t = ac.currentTime + 0.02;
+  const beat = BEAT_MS / 1000;
 
-  const crash = ac.createBufferSource();
-  crash.buffer = noiseBuf;
-  const hp = ac.createBiquadFilter();
-  hp.type = "highpass";
-  hp.frequency.value = 1600;
-  const cg = ac.createGain();
-  cg.gain.setValueAtTime(0.14, t);
-  cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
-  crash.connect(hp);
-  hp.connect(cg);
-  cg.connect(sfxBus);
-  crash.onended = () => {
-    crash.disconnect();
-    hp.disconnect();
-    cg.disconnect();
-  };
-  crash.start(t);
-  crash.stop(t + 0.55);
+  // Hit: crash + timpani + D major stab.
+  crash(out, t, 0.32);
+  timpani(out, t, midi(38), 0.7);
+  [62, 66, 69, 74].forEach((n) => brass(out, t, midi(n), 0.3, 0.07));
+  tone(out, t, midi(26), "sawtooth", 0.18, 0.5, { cutoff: 400 });
+
+  // Da-da-da DAAA, da-da-da DAAAAA.
+  const melody: [number, number, number][] = [
+    [1, 69, 0.1],
+    [1.33, 69, 0.1],
+    [1.67, 69, 0.1],
+    [2, 74, 0.42],
+    [3, 78, 0.1],
+    [3.33, 76, 0.1],
+    [3.67, 78, 0.1],
+  ];
+  melody.forEach(([at, n, dur]) => {
+    brass(out, t + at * beat, midi(n), dur, 0.1);
+    snare(out, t + at * beat, 0.09);
+  });
+  timpani(out, t + 2 * beat, midi(33), 0.5);
+
+  // Final chord on the next downbeat, with a timpani roll under it.
+  const end = t + 4 * beat;
+  crash(out, end, 0.34);
+  timpani(out, end, midi(38), 0.75);
+  [50, 62, 69, 74, 78, 81].forEach((n) => brass(out, end, midi(n), 1.6, n > 75 ? 0.08 : 0.06));
+  strings(out, end, [74, 78, 81, 86], 1.6, 0.04);
+  tone(out, end, midi(26), "sawtooth", 0.2, 1.7, { cutoff: 380, attack: 0.02 });
+  for (let i = 1; i <= 8; i++) timpani(out, end + 0.9 + i * 0.07, midi(38), 0.1 + i * 0.03);
+  timpani(out, end + 1.55, midi(38), 0.7);
+
+  // Sparkles in D major pentatonic.
+  const sparkle = [86, 88, 90, 93, 95, 98];
+  for (let i = 0; i < 12; i++) {
+    chime(out, end + 0.05 + i * 0.11 + Math.random() * 0.05, midi(sparkle[i % sparkle.length]!), 0.04);
+  }
+
+  applause(out, t + 0.25, 4.5);
 }

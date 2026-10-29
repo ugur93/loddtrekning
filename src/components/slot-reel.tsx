@@ -66,8 +66,13 @@ function buildStrip(items: SlotItem[], winnerId: string, seed: string): SlotItem
   return strip;
 }
 
-function easeOutQuint(t: number) {
-  return 1 - Math.pow(1 - t, 5);
+/**
+ * Firm ease-out: the reel keeps visibly moving until the very end, so the
+ * value lands at the same moment onStop fires (sound + light). A softer curve
+ * like quint looks stopped ~1s before it reports done.
+ */
+function easeOut(t: number) {
+  return 1 - Math.pow(1 - t, 1.7);
 }
 
 export function SlotReel({
@@ -121,7 +126,7 @@ export function SlotReel({
         return;
       }
       const t = Math.min(1, (elapsed - delayMs) / durationMs);
-      const y = easeOutQuint(t) * target;
+      const y = easeOut(t) * target;
       setY(y);
       const cell = Math.floor(y / itemHeight);
       if (cell !== lastCell) {

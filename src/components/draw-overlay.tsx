@@ -8,13 +8,15 @@ import { Button } from "@/components/ui/button";
 import { colorLabel } from "@/lib/colors";
 import {
   getDrawMuted,
-  playClunk,
+  BEAT_MS,
+  MUSIC_LEAD_MS,
   playFanfare,
+  playLock,
   playTick,
   setDrawMuted,
-  setSpinEnergy,
+  setSpinStage,
   startDrawAmbience,
-  stopDrawAmbience,
+  stopDrawSound,
   unlockDrawAudio,
 } from "@/lib/draw-audio";
 import { expandPool, formatNumber } from "@/lib/tickets";
@@ -33,6 +35,12 @@ type Props = {
 };
 
 const ITEM_H = 76;
+
+const REELS = ["color", "letter", "number"] as const;
+/** Reels land on beats 6, 8 and 10 of the music; the winner is revealed on beat 12. */
+const LAND_BEATS = [6, 8, 10];
+const landAt = (reel: number) => MUSIC_LEAD_MS + LAND_BEATS[reel]! * BEAT_MS;
+const REVEAL_AFTER_MS = 2 * BEAT_MS;
 
 export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) {
   const books = useRaffleStore((s) => s.books);
@@ -130,7 +138,7 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
     startDrawAmbience();
     return () => {
       window.clearTimeout(revealTimer.current);
-      stopDrawAmbience();
+      stopDrawSound();
     };
   }, [winner.id, reduced]);
 
@@ -145,16 +153,16 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
   function lock(which: "color" | "letter" | "number") {
     setLocked((s) => {
       if (s[which]) return s;
-      playClunk();
+      playLock(REELS.indexOf(which));
       const next = { ...s, [which]: true };
       const count = Number(next.color) + Number(next.letter) + Number(next.number);
-      setSpinEnergy(1 - count * 0.32);
+      setSpinStage(count);
       if (next.color && next.letter && next.number && !revealed.current) {
         revealed.current = true;
         revealTimer.current = window.setTimeout(() => {
           playFanfare();
           setPhase("reveal");
-        }, 420);
+        }, REVEAL_AFTER_MS);
       }
       return next;
     });
@@ -264,7 +272,7 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
                     key={`${winner.id}-color`}
                     items={colorItems}
                     winnerId={winner.colorName.toUpperCase()}
-                    durationMs={2200}
+                    durationMs={landAt(0) - 40}
                     delayMs={40}
                     itemHeight={ITEM_H}
                     reduced={reduced}
@@ -279,7 +287,7 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
                     key={`${winner.id}-letter`}
                     items={letterItems}
                     winnerId={winner.letter.toUpperCase()}
-                    durationMs={2800}
+                    durationMs={landAt(1) - 120}
                     delayMs={120}
                     itemHeight={ITEM_H}
                     reduced={reduced}
@@ -293,7 +301,7 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
                     key={`${winner.id}-number`}
                     items={numberItems}
                     winnerId={String(winner.number)}
-                    durationMs={3400}
+                    durationMs={landAt(2) - 200}
                     delayMs={200}
                     itemHeight={ITEM_H}
                     reduced={reduced}
