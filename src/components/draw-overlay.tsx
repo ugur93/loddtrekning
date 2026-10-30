@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import { ConfettiCanvas } from "@/components/confetti-canvas";
+import { FullscreenButton } from "@/components/fullscreen-button";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { SlotReel, type SlotItem } from "@/components/slot-reel";
 import { TicketCard } from "@/components/ticket-card";
@@ -211,6 +212,7 @@ export function DrawOverlay({ winner, remaining, onClose, onDrawAgain }: Props) 
         <p className="text-sm tracking-[0.22em] text-stage-muted uppercase">{t.appTitle}</p>
         <div className="flex items-center gap-1">
           <LocaleSwitch tone="stage" />
+          <FullscreenButton tone="stage" />
           <button
             type="button"
             onClick={toggleMute}

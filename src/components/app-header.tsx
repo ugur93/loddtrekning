@@ -1,6 +1,7 @@
 import { Monitor, RotateCcw, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { FullscreenButton } from "@/components/fullscreen-button";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ export function AppHeader() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <LocaleSwitch />
+          <FullscreenButton />
           <Button
             variant="secondary"
             size="sm"

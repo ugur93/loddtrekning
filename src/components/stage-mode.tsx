@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { WinnersRail } from "@/components/draw-overlay";
 import { DrawStage } from "@/components/draw-stage";
+import { FullscreenButton } from "@/components/fullscreen-button";
 import { LocaleSwitch } from "@/components/locale-switch";
 import { useI18n } from "@/lib/i18n";
 import { useRaffleStore } from "@/lib/store";
@@ -20,6 +21,7 @@ export function StageMode() {
         </div>
         <div className="flex items-center gap-2">
           <LocaleSwitch tone="stage" />
+          <FullscreenButton tone="stage" />
           <button
             type="button"
             onClick={() => setStageMode(false)}
