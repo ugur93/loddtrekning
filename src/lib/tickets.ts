@@ -38,6 +38,48 @@ export function expandPool(books: TicketBook[], drawnKeys: Iterable<string>): Po
   return pool;
 }
 
+type NewBook = Omit<TicketBook, "id">;
+
+/**
+ * Drops numbers that already exist for the same color + letter (also within
+ * the new batch), so a ticket can never be in the draw twice. Partly
+ * overlapping ranges are split into the free parts.
+ */
+export function withoutDuplicates(existing: TicketBook[], incoming: NewBook[]) {
+  const key = (b: { colorName: string; letter: string }) =>
+    `${b.colorName.trim().toUpperCase()}|${b.letter.trim().toUpperCase()}`;
+  const taken = new Map<string, Set<number>>();
+  const takenFor = (b: { colorName: string; letter: string }) => {
+    const k = key(b);
+    if (!taken.has(k)) taken.set(k, new Set());
+    return taken.get(k)!;
+  };
+  for (const b of existing) {
+    const set = takenFor(b);
+    for (let n = b.from; n <= b.to; n++) set.add(n);
+  }
+  const books: NewBook[] = [];
+  let added = 0;
+  let skipped = 0;
+  for (const b of incoming) {
+    const set = takenFor(b);
+    let runFrom: number | null = null;
+    for (let n = b.from; n <= b.to + 1; n++) {
+      const free = n <= b.to && !set.has(n);
+      if (free) {
+        set.add(n);
+        added += 1;
+        runFrom ??= n;
+      } else {
+        if (n <= b.to) skipped += 1;
+        if (runFrom !== null) books.push({ ...b, from: runFrom, to: n - 1 });
+        runFrom = null;
+      }
+    }
+  }
+  return { books, added, skipped };
+}
+
 export function remainingInBook(book: TicketBook, drawnKeys: Iterable<string>) {
   const drawn = drawnKeys instanceof Set ? drawnKeys : new Set(drawnKeys);
   let count = 0;

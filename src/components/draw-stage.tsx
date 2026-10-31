@@ -112,7 +112,7 @@ export function DrawStage() {
               aria-label={t.drawMode}
               className="mx-auto grid w-fit grid-cols-2 gap-1 rounded-md bg-stage-fg/10 p-1 text-sm"
             >
-              {(["balanced", "random"] as const).map((mode) => (
+              {(["random", "balanced"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"

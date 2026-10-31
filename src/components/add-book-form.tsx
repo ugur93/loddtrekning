@@ -80,12 +80,13 @@ export function AddBookForm() {
       toast.error(t.badRange);
       return;
     }
-    addBooks(
-      letters.flatMap((letter) =>
-        colors.map((c) => ({ colorName: c.name, colorHex: c.hex, letter, from, to })),
+    reportAdded(
+      addBooks(
+        letters.flatMap((letter) =>
+          colors.map((c) => ({ colorName: c.name, colorHex: c.hex, letter, from, to })),
+        ),
       ),
     );
-    toast.success(t.addedTickets(ticketCount));
   }
 
   function submitBulk() {
@@ -94,10 +95,15 @@ export function AddBookForm() {
       toast.error(t.badLines);
       return;
     }
-    addBooks(parsed.map(bookFromParsed));
+    reportAdded(addBooks(parsed.map(bookFromParsed)));
     setBulk("");
     setShowBulk(false);
-    toast.success(t.addedTickets(bulkCount));
+  }
+
+  function reportAdded({ added, skipped }: { added: number; skipped: number }) {
+    if (added === 0) toast.error(t.allExisted(skipped));
+    else if (skipped > 0) toast.success(`${t.addedTickets(added)}. ${t.someExisted(skipped)}`);
+    else toast.success(t.addedTickets(added));
   }
 
   const customColors = colors.filter((c) => !PALETTE.some((p) => p.name === c.name));

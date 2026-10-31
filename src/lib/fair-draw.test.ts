@@ -58,6 +58,25 @@ test("same color or letter never wins three times in a row while others remain",
   }
 });
 
+test("pure random: every color and letter wins its share, also with many letters per color", () => {
+  // Uneven book: Rosa has letters A–E, Blå only A, so Rosa is 5/6 of the tickets.
+  const all = books([["Rosa", ["A", "B", "C", "D", "E"], 1, 25], ["Blå", ["A"], 1, 25]]);
+  const counts = new Map<string, number>();
+  const rounds = 4000;
+  for (let r = 0; r < rounds; r++) {
+    const [w] = run(all, 1, "random");
+    for (const key of [`c:${w!.colorName}`, `l:${w!.letter}`, `b:${w!.colorName}${w!.letter}`]) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+  const share = (key: string) => (counts.get(key) ?? 0) / rounds;
+  assert.ok(Math.abs(share("c:Rosa") - 5 / 6) < 0.03, `Rosa ${share("c:Rosa")}`);
+  assert.ok(Math.abs(share("l:A") - 2 / 6) < 0.03, `A ${share("l:A")}`);
+  for (const book of ["RosaA", "RosaB", "RosaC", "RosaD", "RosaE", "BlåA"]) {
+    assert.ok(Math.abs(share(`b:${book}`) - 1 / 6) < 0.025, `${book} ${share(`b:${book}`)}`);
+  }
+});
+
 test("raffle never stalls and draws every ticket once", () => {
   const all = books([["Rød", AY.slice(0, 5), 1, 4], ["Blå", ["A", "B"], 1, 4]]);
   const winners = run(all, Infinity, "balanced");

@@ -8,17 +8,18 @@ import {
   remainingInBook,
   ticketKey,
   winnerFromTicket,
+  withoutDuplicates,
 } from "@/lib/tickets";
 import type { DrawMode } from "@/lib/fair-draw";
-import type { Prize, RaffleSnapshot, TicketBook, Winner } from "@/lib/types";
+import type { BookGrouping, Prize, RaffleSnapshot, TicketBook, Winner } from "@/lib/types";
 
 type DrawResult =
   | { ok: true; winner: Winner; remaining: number }
   | { ok: false; reason: "empty" | "none" };
 
 type RaffleState = RaffleSnapshot & {
-  addBook: (book: Omit<TicketBook, "id"> & { id?: string }) => string;
-  addBooks: (books: Omit<TicketBook, "id">[]) => void;
+  /** Adds tickets, skipping any that already exist. Returns ticket counts. */
+  addBooks: (books: Omit<TicketBook, "id">[]) => { added: number; skipped: number };
   removeBook: (id: string) => void;
   setEventName: (name: string) => void;
   addPrize: (prize: Omit<Prize, "id"> & { id?: string }) => void;
@@ -31,6 +32,7 @@ type RaffleState = RaffleSnapshot & {
   loadExample: () => void;
   setStageMode: (on: boolean) => void;
   setDrawMode: (mode: DrawMode) => void;
+  setBookGrouping: (grouping: BookGrouping) => void;
 };
 
 const OLD_HEX = new Set(["#1565C0", "#D4A017", "#2E7D32", "#C2185B"]);
@@ -42,7 +44,8 @@ const initial: RaffleSnapshot = {
   winners: [],
   drawnKeys: [],
   stageMode: false,
-  drawMode: "balanced",
+  drawMode: "random",
+  bookGrouping: "none",
 };
 
 export const useRaffleStore = create<RaffleState>()(
@@ -50,18 +53,13 @@ export const useRaffleStore = create<RaffleState>()(
     (set, get) => ({
       ...initial,
       setEventName: (eventName) => set({ eventName }),
-      addBook: (book) => {
-        const id = book.id ?? crypto.randomUUID();
-        set((s) => ({ books: [...s.books, { ...book, id }] }));
-        return id;
-      },
-      addBooks: (books) =>
+      addBooks: (books) => {
+        const { books: fresh, added, skipped } = withoutDuplicates(get().books, books);
         set((s) => ({
-          books: [
-            ...s.books,
-            ...books.map((b) => ({ ...b, id: crypto.randomUUID() })),
-          ],
-        })),
+          books: [...s.books, ...fresh.map((b) => ({ ...b, id: crypto.randomUUID() }))],
+        }));
+        return { added, skipped };
+      },
       removeBook: (id) =>
         set((s) => ({
           books: s.books.filter((b) => b.id !== id),
@@ -118,7 +116,8 @@ export const useRaffleStore = create<RaffleState>()(
           };
         }),
       newRound: () => set({ winners: [], drawnKeys: [] }),
-      resetAll: () => set({ ...initial, eventName: get().eventName }),
+      resetAll: () =>
+        set({ ...initial, eventName: get().eventName, bookGrouping: get().bookGrouping }),
       loadExample: () =>
         set((s) => ({
           books:
@@ -128,11 +127,13 @@ export const useRaffleStore = create<RaffleState>()(
         })),
       setStageMode: (stageMode) => set({ stageMode }),
       setDrawMode: (drawMode) => set({ drawMode }),
+      setBookGrouping: (bookGrouping) => set({ bookGrouping }),
     }),
     {
       name: "lodd-raffle-v1",
-      version: 2,
+      version: 3,
       // v2: the four book colors became pastel; recolor saved books and winners.
+      // v3: pure random became the default draw.
       migrate: (persisted, version) => {
         const state = persisted as RaffleSnapshot;
         if (version < 2) {
@@ -145,6 +146,7 @@ export const useRaffleStore = create<RaffleState>()(
           state.books = (state.books ?? []).map(recolor);
           state.winners = (state.winners ?? []).map(recolor);
         }
+        if (version < 3) state.drawMode = "random";
         return state;
       },
       skipHydration: true,
@@ -156,6 +158,7 @@ export const useRaffleStore = create<RaffleState>()(
         drawnKeys: s.drawnKeys,
         stageMode: s.stageMode,
         drawMode: s.drawMode,
+        bookGrouping: s.bookGrouping,
       }),
     },
   ),

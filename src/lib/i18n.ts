@@ -57,10 +57,22 @@ const nb = {
   badRange: "Ugyldige nummer. «Til» må være like stort som eller større enn «Fra».",
   badLines: "Fant ingen gyldige linjer. Eksempel: Rosa A 1-25",
   addedTickets: (n: number) => (n === 1 ? "La til 1 lodd" : `La til ${n} lodd`),
+  someExisted: (n: number) =>
+    n === 1
+      ? "1 lodd fantes fra før og ble hoppet over"
+      : `${n} lodd fantes fra før og ble hoppet over`,
+  allExisted: (n: number) =>
+    n === 1
+      ? "Loddet finnes allerede. Ingenting ble lagt til."
+      : `Alle ${n} lodd finnes allerede. Ingenting ble lagt til.`,
   noBooks: "Ingen lodd lagt inn ennå. Velg farger, bokstav og nummer over.",
-  bookLabel: (letters: string, n: number) => (n === 1 ? `Bok ${letters}` : `Bøker ${letters}`),
   remainingOf: (left: number, total: number) => `${left} av ${total} lodd igjen`,
-  removeBook: (letters: string) => `Fjern bok ${letters}`,
+  removeBook: (name: string) => `Fjern ${name}`,
+  bookLabel: (letter: string) => `Bok ${letter}`,
+  groupBy: "Grupper",
+  groupNone: "Ingen",
+  groupLetter: "Bokstav",
+  groupColor: "Farge",
   prizes: "Premier",
   prizesHint: "Valgfritt. Premiene deles ut i rekkefølgen under.",
   prize: "Premie",
@@ -179,10 +191,19 @@ const tr: Msg = {
   badRange: "Geçersiz numaralar. «Son» numara «İlk» numaradan küçük olamaz.",
   badLines: "Geçerli satır bulunamadı. Örnek: Pembe A 1-25",
   addedTickets: (n) => `${n} bilet eklendi`,
+  someExisted: (n) => `${n} bilet zaten vardı ve atlandı`,
+  allExisted: (n) =>
+    n === 1
+      ? "Bu bilet zaten var. Hiçbir şey eklenmedi."
+      : `${n} biletin hepsi zaten var. Hiçbir şey eklenmedi.`,
   noBooks: "Henüz bilet eklenmedi. Yukarıdan renk, harf ve numara seçin.",
-  bookLabel: (letters, n) => (n === 1 ? `${letters} defteri` : `${letters} defterleri`),
   remainingOf: (left, total) => `${total} biletten ${left} tanesi kaldı`,
-  removeBook: (letters) => `${letters} defterini kaldır`,
+  removeBook: (name) => `${name} kaldır`,
+  bookLabel: (letter) => `${letter} defteri`,
+  groupBy: "Grupla",
+  groupNone: "Yok",
+  groupLetter: "Harf",
+  groupColor: "Renk",
   prizes: "Ödüller",
   prizesHint: "İsteğe bağlı. Ödüller aşağıdaki sırayla verilir.",
   prize: "Ödül",

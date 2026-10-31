@@ -44,4 +44,7 @@ export type RaffleSnapshot = {
   drawnKeys: string[];
   stageMode: boolean;
   drawMode: DrawMode;
+  bookGrouping: BookGrouping;
 };
+
+export type BookGrouping = "none" | "letter" | "color";
